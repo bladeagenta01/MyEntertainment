@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ERE browser smoke test</title><style>body{background:#080f1c;color:#edf2f8;font:14px system-ui;padding:20px}iframe{width:100%;height:720px;border:1px solid #345}pre{white-space:pre-wrap;background:#14243a;padding:14px;border-radius:8px}</style></head>
+<body>
+<h1>Entertainment Explorer browser smoke test</h1>
+<pre id="test-output">Running...</pre>
+<iframe id="app-frame" src="../index.html?test=1" title="App under test"></iframe>
+<script>
+(async function () {
+  const out = document.getElementById('test-output');
+  const lines = [];
+  const pass = message => lines.push(`PASS: ${message}`);
+  const fail = message => { lines.push(`FAIL: ${message}`); throw new Error(message); };
+  const wait = async (fn, label, timeout = 5000) => {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      try { if (fn()) return; } catch (_) {}
+      await new Promise(resolve => setTimeout(resolve, 60));
+    }
+    fail(`Timed out waiting for ${label}`);
+  };
+  try {
+    const frame = document.getElementById('app-frame');
+    if (frame.contentDocument?.readyState !== 'complete') {
+      await new Promise(resolve => frame.addEventListener('load', resolve, { once: true }));
+    }
+    const w = frame.contentWindow;
+    const d = frame.contentDocument;
+    w.confirm = () => true;
+    w.open = () => null;
+    w.fetch = async function (url) {
+      const value = String(url);
+      let data = {};
+      if (value.includes('api.tvmaze.com/search/shows')) {
+        data = [{ show: { id: 123, name: 'Smoke Test Series', summary: '<p>A controlled test record.</p>', premiered: '2020-01-01', network: { name: 'Test Network' }, image: null, url: 'https://www.tvmaze.com/shows/123/smoke-test-series', externals: { imdb: 'tt1234567' } } }];
+      } else if (value.includes('/shows/123/cast')) {
+        data = [{ person: { name: 'Test Actor', url: 'https://www.tvmaze.com/people/1/test-actor' }, character: { name: 'Test Character' } }];
+      } else if (value.includes('/shows/123/crew')) {
+        data = [{ person: { name: 'Test Director', url: 'https://www.tvmaze.com/people/2/test-director' }, type: 'Director' }];
+      } else if (value.includes('en.wikipedia.org/w/api.php')) {
+        data = { query: { pages: {} } };
+      } else {
+        throw new Error(`Unexpected mocked URL: ${value}`);
+      }
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    await wait(() => d.querySelector('#main-view')?.textContent.includes('Entertainment,'), 'initial app render');
+    pass('application starts and renders the overview');
+    await w.EREStorage.ready();
+    await wait(() => d.querySelector('#saved-count')?.textContent === '0', 'empty library count');
+    pass('personal library starts empty with no sample records');
+
+    const nav = view => { const b = d.querySelector(`[data-action="navigate"][data-view="${view}"]`); if (!b) fail(`missing ${view} navigation`); b.click(); };
+    nav('explore'); await wait(() => d.querySelector('#main-view')?.textContent.includes('Choose a starting point'), 'Explore screen'); pass('Explore navigation works');
+    nav('connections'); await wait(() => d.querySelector('#main-view')?.textContent.includes('No active relationship map'), 'Connections screen'); pass('Connections navigation works');
+    nav('news'); await wait(() => d.querySelector('#main-view')?.textContent.includes('What’s happening now?'), 'News screen'); pass('What’s New navigation works');
+    nav('settings'); await wait(() => d.querySelector('#main-view')?.textContent.includes('Settings'), 'Settings screen'); pass('Settings navigation works');
+    nav('library'); await wait(() => d.querySelector('#main-view')?.textContent.includes('Your saved research is empty'), 'Library screen'); pass('Saved Research navigation works');
+    nav('search'); await wait(() => d.querySelector('#research-search-form'), 'Search screen'); pass('Research Search navigation works');
+
+    const input = d.querySelector('#research-query');
+    input.value = 'Smoke Test Series';
+    d.querySelector('#research-search-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(() => d.querySelector('.result-card h3')?.textContent === 'Smoke Test Series', 'live search result');
+    pass('search form submits and renders a normalised source result');
+    d.querySelector('[data-action="detail"]').click();
+    await wait(() => !d.querySelector('#detail-modal').hidden && d.querySelector('#detail-title')?.textContent === 'Smoke Test Series', 'detail modal');
+    pass('result details open');
+    d.querySelector('#detail-modal [data-action="close-modal"]').click();
+
+    d.querySelector('[data-action="explore-result"]').click();
+    await wait(() => d.querySelector('.graph-svg') && d.querySelector('.graph-node'), 'relationship graph');
+    pass('source-backed cast and crew relationships render in the graph');
+    nav('search'); await wait(() => d.querySelector('.result-card'), 'return to search results');
+    d.querySelector('[data-action="save-result"]').click();
+    await wait(() => d.querySelector('#saved-count')?.textContent === '1', 'saved record count');
+    d.querySelector('[data-action="save-search"]').click();
+    await wait(() => d.querySelector('#saved-count')?.textContent === '2', 'saved search count');
+    pass('save result and search write records to IndexedDB');
+
+    d.querySelector('[data-action="explore-result"]').click();
+    await wait(() => d.querySelector('.graph-svg') && d.querySelector('.graph-node'), 'relationship graph for saved map');
+    d.querySelector('[data-action="save-map"]').click();
+    pass('relationship map can be saved locally');
+
+    nav('library'); await wait(() => d.querySelectorAll('.library-item').length === 2, 'saved library entries');
+    const searchRow = Array.from(d.querySelectorAll('.library-item')).find(row => row.textContent.includes('Search: Smoke Test Series'));
+    if (!searchRow) fail('saved search entry not found');
+    searchRow.querySelector('[data-action="open-record"]').click();
+    await wait(() => d.querySelector('#main-view')?.textContent.includes('Saved snapshot.'), 'saved search snapshot');
+    pass('saved search can be reopened as a local snapshot');
+
+    nav('library'); await wait(() => d.querySelectorAll('.library-item').length === 2, 'return to saved library');
+    const mapRow = Array.from(d.querySelectorAll('.library-item')).find(row => row.querySelector('h3')?.textContent === 'Smoke Test Series');
+    if (!mapRow) fail('saved relationship map not found');
+    mapRow.querySelector('[data-action="open-record"]').click();
+    await wait(() => d.querySelector('.graph-svg') && d.querySelector('.note-banner')?.textContent.includes('Saved relationship snapshot'), 'saved relationship map snapshot');
+    pass('saved relationship map can be reopened offline');
+
+    nav('library'); await wait(() => d.querySelectorAll('.library-item').length === 2, 'saved library before editing');
+    const editRow = Array.from(d.querySelectorAll('.library-item')).find(row => row.querySelector('h3')?.textContent === 'Smoke Test Series');
+    editRow.querySelector('[data-action="edit-record"]').click();
+    await wait(() => !d.querySelector('#edit-modal').hidden, 'edit dialog');
+    d.querySelector('#edit-title-input').value = 'Smoke Test Series Edited';
+    d.querySelector('#edit-notes-input').value = 'Notes saved by the browser smoke test.';
+    d.querySelector('#edit-form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await wait(() => Array.from(d.querySelectorAll('.library-item h3')).some(item => item.textContent === 'Smoke Test Series Edited'), 'edited library entry');
+    pass('saved record can be edited');
+
+    const backup = await w.EREStorage.exportBackup();
+    const merge = await w.EREStorage.importBackup(backup);
+    if (merge.imported !== 0 || merge.skipped < 2) fail('backup merge did not skip duplicate records');
+    pass('backup import merges and skips duplicates');
+
+    const editedRow = Array.from(d.querySelectorAll('.library-item')).find(row => row.querySelector('h3')?.textContent === 'Smoke Test Series Edited');
+    editedRow.querySelector('[data-action="delete-record"]').click();
+    await wait(() => d.querySelectorAll('.library-item').length === 1, 'first deleted library entry');
+    d.querySelector('.library-item [data-action="delete-record"]').click();
+    await wait(() => d.querySelector('#main-view')?.textContent.includes('Your saved research is empty'), 'empty library after deletion');
+    pass('saved records can be deleted');
+    nav('home'); await wait(() => d.querySelector('#main-view')?.textContent.includes('Entertainment,'), 'return to overview');
+    pass('Overview navigation works');
+
+    out.textContent = lines.join('\n') + '\n\nSMOKE TEST PASSED';
+    document.title = 'SMOKE PASS';
+  } catch (error) {
+    out.textContent = lines.join('\n') + `\n\nSMOKE TEST FAILED: ${error.stack || error.message}`;
+    document.title = 'SMOKE FAIL';
+  }
+})();
+</script>
+</body></html>

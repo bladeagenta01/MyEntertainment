@@ -1,0 +1,15 @@
+name = "ere-research-gateway"
+main = "index.js"
+compatibility_date = "2026-11-08"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "*"
+APP_CONTACT = "https://github.com/"
+TMDB_ATTRIBUTION_READY = "no"
+AI_BASE_URL = ""
+AI_MODEL = ""
+AI_PROVIDER_NAME = ""
+
+# Add secrets separately with `wrangler secret put`.
+# Never put API keys in this file or in the PWA.

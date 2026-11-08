@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080f1c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Entertainment Explorer">
+  <meta name="description" content="Research entertainment, discover meaningful connections and save your discoveries.">
+  <meta name="color-scheme" content="dark">
+  <title>Entertainment Relationship Explorer</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
+  <link rel="stylesheet" href="./css/styles.css">
+  <script defer src="./js/storage.js"></script>
+  <script defer src="./js/api.js"></script>
+  <script defer src="./js/graph.js"></script>
+  <script defer src="./js/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#home" data-action="navigate" data-view="home" aria-label="Entertainment Relationship Explorer home">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span class="brand-copy"><strong>ENTERTAINMENT</strong><small>RELATIONSHIP EXPLORER</small></span>
+      </a>
+      <div class="sidebar-label">WORKSPACE</div>
+      <nav class="primary-nav">
+        <button class="nav-item active" data-action="navigate" data-view="home"><span class="nav-icon">⌂</span><span>Overview</span></button>
+        <button class="nav-item" data-action="navigate" data-view="explore"><span class="nav-icon">◈</span><span>Explore</span></button>
+        <button class="nav-item" data-action="navigate" data-view="search"><span class="nav-icon">⌕</span><span>Research search</span></button>
+        <button class="nav-item" data-action="navigate" data-view="connections"><span class="nav-icon">◎</span><span>Connections</span></button>
+        <button class="nav-item" data-action="navigate" data-view="news"><span class="nav-icon">◷</span><span>What's new</span></button>
+      </nav>
+      <div class="sidebar-label library-label">PERSONAL</div>
+      <nav class="primary-nav">
+        <button class="nav-item" data-action="navigate" data-view="library"><span class="nav-icon">▣</span><span>Saved research</span><span class="nav-count" id="saved-count">0</span></button>
+        <button class="nav-item" data-action="navigate" data-view="settings"><span class="nav-icon">⚙</span><span>Settings</span></button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-status">
+        <span class="status-dot" id="sidebar-status-dot"></span>
+        <span><strong id="sidebar-status-title">Internet ready</strong><small id="sidebar-status-detail">Live sources available</small></span>
+      </div>
+      <div class="sidebar-footer">PERSONAL RESEARCH WORKSPACE<br><span>Build 0.1 Draft 2</span></div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark small"><span></span><span></span><span></span></span><strong>ENTERTAINMENT EXPLORER</strong></div>
+        <div class="breadcrumb" id="breadcrumb"><span>WORKSPACE</span><b>/</b><strong>Overview</strong></div>
+        <div class="topbar-actions">
+          <span class="connection-pill" id="connection-pill"><i></i><span>Checking connection</span></span>
+          <button class="icon-button" title="Open settings" aria-label="Open settings" data-action="navigate" data-view="settings">⚙</button>
+          <div class="user-orb" aria-label="Personal workspace">E</div>
+        </div>
+      </header>
+
+      <div id="main-view" class="main-view" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <button class="mobile-nav-item active" data-action="navigate" data-view="home"><span>⌂</span><small>Home</small></button>
+    <button class="mobile-nav-item" data-action="navigate" data-view="search"><span>⌕</span><small>Search</small></button>
+    <button class="mobile-nav-item" data-action="navigate" data-view="connections"><span>◎</span><small>Graph</small></button>
+    <button class="mobile-nav-item" data-action="navigate" data-view="library"><span>▣</span><small>Saved</small></button>
+    <button class="mobile-nav-item" data-action="navigate" data-view="settings"><span>⚙</span><small>Settings</small></button>
+  </nav>
+
+  <div class="modal-backdrop" id="detail-modal" hidden>
+    <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <button class="modal-close" data-action="close-modal" aria-label="Close">×</button>
+      <div id="detail-content"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="edit-modal" hidden>
+    <section class="modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+      <button class="modal-close" data-action="close-modal" aria-label="Close">×</button>
+      <form id="edit-form">
+        <div class="eyebrow">PERSONAL RESEARCH</div>
+        <h2 id="edit-title">Edit saved research</h2>
+        <p class="muted" id="edit-subtitle">Update your private notes.</p>
+        <label class="field-label" for="edit-title-input">Display title</label>
+        <input id="edit-title-input" name="title" maxlength="160" required>
+        <label class="field-label" for="edit-notes-input">Your notes</label>
+        <textarea id="edit-notes-input" name="notes" rows="6" maxlength="5000" placeholder="Add your own notes or context..."></textarea>
+        <input type="hidden" id="edit-record-id" name="id">
+        <div class="modal-actions"><button class="button secondary" type="button" data-action="close-modal">Cancel</button><button class="button primary" type="submit">Save changes</button></div>
+      </form>
+    </section>
+  </div>
+
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
