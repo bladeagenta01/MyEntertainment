@@ -1,138 +1,86 @@
-# Entertainment Relationship Explorer
-## 0.1 Draft 2
+# Entertainment Research v0.1 Pilot Draft 1
 
-A cinematic, online-first entertainment research and visualisation PWA for personal use.
+Status: revised review draft. Not a production release.
 
-This is a working draft, not a finished release. It replaces the earlier simplified 0.1/0.2 attempts for review. The semantic release remains 0.1 while the foundation is being corrected.
+## Purpose
 
-## What this draft contains
+A simple, search-led entertainment research application. The GitHub Query project is used only as the interface and interaction reference. Entertainment Relationship Explorer v3.8 supplies the research scope. The supplied screenshots guide the black, illustrated, long-form results presentation.
 
-- Responsive cinematic dark interface for iPhone and Windows.
-- Overview, Explore, Research Search, Connections, What's New, Saved Research and Settings.
-- Direct public-source search for TVmaze and Wikipedia.
-- Optional Cloudflare research gateway for MusicBrainz, Open Library, Apple Search, TMDB, Brave web/news search and independent AI reasoning.
-- Source-backed relationship map. Unsupported connections are not invented.
-- IndexedDB personal library with save, edit, delete, export and merge import. Saved searches and relationship maps can be reopened offline and refreshed when online.
-- PWA manifest, icons and service worker.
-- Full approved Entertainment Relationship Explorer v3.8 prompt included and embedded in the Worker.
+## Important architecture decision
 
-## Important behaviour
+This revision has **no AI model dependency and makes no AI API calls**. It does not require an OpenAI key, any other model key, or an AI account.
 
-- Search is online-first.
-- Offline use is for the app shell and research the user has explicitly saved.
-- No sample entries are preloaded into the personal library.
-- Search results are not automatically saved.
-- API keys are never entered into the browser. Optional keys belong in Cloudflare Worker secrets.
-- Direct mode without the Worker is deliberately limited to TVmaze and Wikipedia. Connect the Worker for specialist databases, wider web search and AI.
+The application uses fixed classification rules and retrieves records from public catalogue services through a Cloudflare Worker. The Worker does not generate answers. The browser formats the returned records into a consistent results page.
 
-## 1. Test the app locally
+This is a deliberately limited first pilot. It is a catalogue retrieval application, not yet a full web research agent. It cannot reproduce all open-ended synthesis, relationship reasoning, current-news discovery or verification capabilities in the Entertainment 3.8 ChatGPT prompt without additional deterministic data sources and explicitly designed rules.
 
-The app no longer uses JavaScript modules. You can open `index.html` directly to inspect the interface and local controls. For reliable API testing and PWA behaviour, use a local web server:
+## Included functionality
+
+- Empty question box. No example placeholder.
+- Entertainment-specific category menu, with automatic keyword classification as an option.
+- Research depth selection.
+- Optional region and spoiler controls retained for the future research stages. They do not currently alter provider results.
+- Live retrieval from Wikipedia across categories.
+- Additional live catalogue retrieval for music (Apple iTunes Search), television (TVmaze), and books (Open Library).
+- Source labels and direct links for returned records.
+- Black results presentation with optional source artwork.
+- New Search clears the current question and results.
+- No saved searches, history, user profile, browser storage, database, cookies, or application memory.
+
+## Current source coverage
+
+| Category | Sources in this pilot | Current limitation |
+|---|---|---|
+| Music | Wikipedia, Apple iTunes Search | Catalogue matches, not full discography or verified credits |
+| Television | Wikipedia, TVmaze | Basic programme records, not episode-level verification |
+| Books | Wikipedia, Open Library | Catalogue records, not full literary analysis |
+| Film and cinema | Wikipedia | No TMDB or IMDb API integration yet |
+| Documentary | Wikipedia | No specialist documentary catalogue yet |
+| People | Wikipedia | No comprehensive professional-credit graph |
+| Games | Wikipedia | No specialist game database yet |
+| Theatre | Wikipedia | No specialist theatre database yet |
+| Cross-media | Wikipedia, selected music/TV/book catalogues | Broad discovery only; results are not automatically proven relationships |
+| Upcoming | Same available catalogues | No dedicated future-release or live-news search yet |
+
+A missing result does not establish that a work or relationship does not exist. Search results are source records, not independently verified conclusions.
+
+## Files
+
+- `index.html`, `styles.css`, `app.js`: interface and result display.
+- `config.js`: deployed Worker URL. No secrets belong here.
+- `worker/worker.js`: stateless retrieval gateway. No AI integration or secrets required.
+- `wrangler.toml`: Cloudflare Worker deployment configuration.
+- `ENTERTAINMENT-3.8-SOURCE-PROMPT.md`: retained reference copy of the approved research specification. It is not executed by the current application.
+- `RESEARCH-MAPPING.md`: scope mapping and known implementation gaps.
+- `CHANGELOG.md`: revision record.
+
+## Local interface review
 
 1. Extract the ZIP.
-2. Open a terminal in the project folder.
-3. Run:
+2. Open `index.html` in a modern browser to review the interface.
+3. Live search requires the Worker to be deployed and its URL entered in `config.js`.
 
-   ```bash
-   python -m http.server 8000
-   ```
+## Deploy the Worker
 
-4. Open `http://localhost:8000`.
-5. Try navigation, search, save, edit, delete, export and import.
+Prerequisites: a Cloudflare account and Node.js/npm with Wrangler available. No AI account or API key is required.
 
-A directly opened `file://` page cannot install a service worker. Publish through HTTPS to test PWA installation.
+1. Open a terminal in this project folder.
+2. Run `npx wrangler deploy`.
+3. Copy the Worker URL shown by Wrangler.
+4. Edit `config.js` and set `window.ENTERTAINMENT_API_ENDPOINT` to that HTTPS Worker URL. Do not append `/research`.
+5. Publish the static application files to the GitHub Pages repository.
+6. Test searches in the published app. Try a music query with the category set to Music, a television query with Television selected, and a book query with Books selected.
 
-## 2. Publish through GitHub Pages
+The Worker calls public catalogue endpoints. Those providers may change their APIs, impose limits, or be temporarily unavailable. This pilot does not add provider credentials.
 
-1. Sign in to GitHub.
-2. Create a new repository for this project.
-3. Extract the ZIP on your Windows laptop.
-4. Upload the contents of the `Entertainment_Relationship_Explorer_v0.1-draft-2` folder to the repository root. Do not upload the ZIP itself as the only repository file.
-5. Open the repository's **Settings**.
-6. Open **Pages**.
-7. Under Build and deployment, choose **Deploy from a branch**.
-8. Choose branch `main` and folder `/ (root)`, then save.
-9. Wait for GitHub Pages to publish and open the supplied HTTPS URL.
+## Privacy and no-memory behaviour
 
-The app can be used without the optional Worker, but search coverage is limited.
+The application does not write search terms or results to localStorage, IndexedDB, cookies or an application database. Each request is independent. The Worker does not intentionally persist request or response content. Public catalogue providers will receive the search terms needed to answer the request and may process technical logs under their own policies. This is not a claim that internet infrastructure retains no logs.
 
-## 3. Deploy the optional Cloudflare research gateway
+## Testing status
 
-1. Open the `worker` folder in a terminal.
-2. Install Wrangler if needed: `npm install -g wrangler`.
-3. Sign in: `wrangler login`.
-4. Deploy from the `worker` folder: `wrangler deploy`.
-5. Copy the `workers.dev` URL.
-6. Open the PWA Settings, choose **Connections & AI**, paste the Worker URL and save it.
-7. Select **Check connection**.
-8. After GitHub Pages is live, change `ALLOWED_ORIGINS` in `worker/wrangler.toml` from `*` to the exact GitHub Pages origin and redeploy.
+The revised JavaScript files are syntax-checked and the ZIP archive is integrity-checked before packaging. The Worker has not been deployed to the user's Cloudflare account from this environment. Live provider calls, GitHub Pages deployment, iPhone Safari and Windows browser behaviour therefore remain unverified.
 
-The Worker can search MusicBrainz, Open Library, Apple Search, TVmaze and Wikipedia without paid keys. Add optional secrets for TMDB and Brave Search if you want those services.
+## Next development boundary
 
-### Optional service secrets
-
-From the `worker` folder, run only for services you choose:
-
-```bash
-wrangler secret put TMDB_API_KEY
-wrangler secret put BRAVE_API_KEY
-wrangler secret put AI_API_KEY
-```
-
-For AI, set `AI_BASE_URL`, `AI_MODEL` and `AI_PROVIDER_NAME` in `wrangler.toml`, then deploy. The endpoint must support OpenAI-compatible `/chat/completions`. The API key remains in Cloudflare and is not sent to the browser.
-
-Brave Search is a metered service. Check its current price before adding a key. TMDB requires an account/API key and the approved logo plus attribution before it is enabled. Provider API usage may incur charges. A ChatGPT subscription does not automatically include OpenAI API usage. Do not assume optional keys are free.
-
-## 4. iPhone installation
-
-After GitHub Pages is live:
-
-1. Open the HTTPS site in Safari on your iPhone.
-2. Tap Share.
-3. Choose **Add to Home Screen**.
-4. Launch it from the new Home Screen icon.
-5. Save one research item, close the app, reopen it and confirm the item remains.
-6. With the item saved, briefly enable Airplane Mode and confirm it remains viewable. Live search should be unavailable offline.
-
-This device test has not yet been performed by the build environment.
-
-## 5. Backups
-
-Open Saved Research or Settings and choose **Export backup**. Keep the JSON file somewhere you control. Import uses merge behaviour and skips duplicates. Never upload personal backup files to the public repository.
-
-## Optional developer checks
-
-From the project root, with Node.js 20+ and Python 3 available:
-
-```bash
-node tests/api-smoke.cjs
-node tests/worker-smoke.mjs
-python tests/static-check.py
-```
-
-For a browser interaction smoke test using mocked source responses, start the local server and open `http://localhost:8000/tests/smoke.html`. This checks navigation, search rendering, result details, graph rendering, save/edit/delete, saved snapshots and backup merge behaviour. It does not test live provider services.
-
-## Project documents
-
-- `docs/architecture.md` — recovered approved architecture and implementation structure.
-- `docs/specification.md` — current functional scope and limitations.
-- `docs/testing.md` — test instructions and acceptance boundaries.
-- `docs/build-validation.md` — actual checks performed and limitations.
-- `docs/provider-notes.md` — source usage, attribution, rate limits and provider costs.
-- `docs/requirements-traceability.md` — approved requirements mapped to implemented, partial and deferred status.
-- `docs/changelog.md` — complete technical history for this draft.
-- `docs/Entertainment_Relationship_Explorer_Master_Prompt_v3.8.md` — full controlling research prompt.
-- `docs/three-levels-of-intelligence-reference.png` — recovered architecture reference image.
-- `worker/README.md` — Worker setup and security notes.
-
-## Known limitations
-
-- Live upstream API responses could not be tested from the build container because outbound network access was unavailable.
-- Direct mode is limited to TVmaze and Wikipedia.
-- Wider web/news search requires Brave Search configuration in the Worker.
-- TMDB search requires a TMDB API key and the approved TMDB logo plus required attribution in the app Credits section.
-- In-app AI requires a configured OpenAI-compatible endpoint and Cloudflare secret.
-- Full v3.8 report generation, deep specialist research, complete link verification, regional streaming availability and multi-hop graph traversal are not yet implemented.
-- Real iPhone and Windows device acceptance testing remains outstanding.
-
-See `docs/testing.md` and `docs/changelog.md` before treating this as a release.
+Do not add AI. Do not add search memory. Improve deterministic source coverage and the structured presentation in small, testable steps. In particular, a future version needs explicit source integrations for film/TV identifiers and credits, news and future releases, regional availability, and relationship verification. Do not present unsupported research capabilities as implemented.
