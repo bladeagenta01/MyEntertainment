@@ -1,86 +1,38 @@
-# Entertainment Research v0.1 Pilot Draft 1
+# Entertainment Research v0.1 Pilot Draft. Complete BYOK package
 
-Status: revised review draft. Not a production release.
+## What this package is
+A consolidated pilot package for GitHub Pages (the browser application) and Cloudflare Workers (the AI research proxy). It is a review draft, not a production release.
 
-## Purpose
+## Folder layout
+- `index.html`, `styles.css`, `app.js`, `config.js`: publish these four files at the root of the GitHub Pages repository.
+- `worker-dashboard.js`: complete single-file Cloudflare Worker. Paste the entire file into the Cloudflare dashboard editor.
+- `ENTERTAINMENT-3.8-SOURCE-PROMPT.md`: supplied master prompt source.
+- `RESEARCH-MAPPING.md`: mapping from the master prompt to the pilot.
+- `CHANGELOG.md`: project history and this repair.
+- `README-GITHUB-DEPLOY.md`: GitHub Pages publishing instructions.
+- `README-CLOUDFLARE-DEPLOY.md`: Cloudflare Worker deployment instructions.
+- `wrangler.toml`: optional Wrangler configuration. Not required for dashboard deployment.
 
-A simple, search-led entertainment research application. The GitHub Query project is used only as the interface and interaction reference. Entertainment Relationship Explorer v3.8 supplies the research scope. The supplied screenshots guide the black, illustrated, long-form results presentation.
+## Deployment order
+1. Deploy the Worker using `README-CLOUDFLARE-DEPLOY.md`.
+2. Confirm `https://myentertainment.bladeagenta01.workers.dev/health` returns JSON with `ok: true`.
+3. Publish the four browser files to the root of the GitHub Pages repository.
+4. Open the GitHub Pages URL, configure a provider key in Settings, and use Test & Save Key.
+5. Run a small research test.
 
-## Important architecture decision
+## Important BYOK security facts
+- No developer API key is included.
+- The user's API key is stored in browser localStorage after the provider test succeeds. Browser localStorage is not encrypted.
+- The key is sent over HTTPS from the browser to the Cloudflare Worker and then to the selected AI provider.
+- The Worker does not intentionally log, store, or cache the key. The provider's own retention, billing and usage policies apply.
+- Do not commit an API key to GitHub, `config.js`, or any source file.
+- The Worker currently permits cross-origin requests from any origin for this pilot. Restricting CORS to the exact GitHub Pages origin and adding abuse controls are required before wider public use.
 
-This revision has **no AI model dependency and makes no AI API calls**. It does not require an OpenAI key, any other model key, or an AI account.
-
-The application uses fixed classification rules and retrieves records from public catalogue services through a Cloudflare Worker. The Worker does not generate answers. The browser formats the returned records into a consistent results page.
-
-This is a deliberately limited first pilot. It is a catalogue retrieval application, not yet a full web research agent. It cannot reproduce all open-ended synthesis, relationship reasoning, current-news discovery or verification capabilities in the Entertainment 3.8 ChatGPT prompt without additional deterministic data sources and explicitly designed rules.
-
-## Included functionality
-
-- Empty question box. No example placeholder.
-- Entertainment-specific category menu, with automatic keyword classification as an option.
-- Research depth selection.
-- Optional region and spoiler controls retained for the future research stages. They do not currently alter provider results.
-- Live retrieval from Wikipedia across categories.
-- Additional live catalogue retrieval for music (Apple iTunes Search), television (TVmaze), and books (Open Library).
-- Source labels and direct links for returned records.
-- Black results presentation with optional source artwork.
-- New Search clears the current question and results.
-- No saved searches, history, user profile, browser storage, database, cookies, or application memory.
-
-## Current source coverage
-
-| Category | Sources in this pilot | Current limitation |
-|---|---|---|
-| Music | Wikipedia, Apple iTunes Search | Catalogue matches, not full discography or verified credits |
-| Television | Wikipedia, TVmaze | Basic programme records, not episode-level verification |
-| Books | Wikipedia, Open Library | Catalogue records, not full literary analysis |
-| Film and cinema | Wikipedia | No TMDB or IMDb API integration yet |
-| Documentary | Wikipedia | No specialist documentary catalogue yet |
-| People | Wikipedia | No comprehensive professional-credit graph |
-| Games | Wikipedia | No specialist game database yet |
-| Theatre | Wikipedia | No specialist theatre database yet |
-| Cross-media | Wikipedia, selected music/TV/book catalogues | Broad discovery only; results are not automatically proven relationships |
-| Upcoming | Same available catalogues | No dedicated future-release or live-news search yet |
-
-A missing result does not establish that a work or relationship does not exist. Search results are source records, not independently verified conclusions.
-
-## Files
-
-- `index.html`, `styles.css`, `app.js`: interface and result display.
-- `config.js`: deployed Worker URL. No secrets belong here.
-- `worker/worker.js`: stateless retrieval gateway. No AI integration or secrets required.
-- `wrangler.toml`: Cloudflare Worker deployment configuration.
-- `ENTERTAINMENT-3.8-SOURCE-PROMPT.md`: retained reference copy of the approved research specification. It is not executed by the current application.
-- `RESEARCH-MAPPING.md`: scope mapping and known implementation gaps.
-- `CHANGELOG.md`: revision record.
-
-## Local interface review
-
-1. Extract the ZIP.
-2. Open `index.html` in a modern browser to review the interface.
-3. Live search requires the Worker to be deployed and its URL entered in `config.js`.
-
-## Deploy the Worker
-
-Prerequisites: a Cloudflare account and Node.js/npm with Wrangler available. No AI account or API key is required.
-
-1. Open a terminal in this project folder.
-2. Run `npx wrangler deploy`.
-3. Copy the Worker URL shown by Wrangler.
-4. Edit `config.js` and set `window.ENTERTAINMENT_API_ENDPOINT` to that HTTPS Worker URL. Do not append `/research`.
-5. Publish the static application files to the GitHub Pages repository.
-6. Test searches in the published app. Try a music query with the category set to Music, a television query with Television selected, and a book query with Books selected.
-
-The Worker calls public catalogue endpoints. Those providers may change their APIs, impose limits, or be temporarily unavailable. This pilot does not add provider credentials.
-
-## Privacy and no-memory behaviour
-
-The application does not write search terms or results to localStorage, IndexedDB, cookies or an application database. Each request is independent. The Worker does not intentionally persist request or response content. Public catalogue providers will receive the search terms needed to answer the request and may process technical logs under their own policies. This is not a claim that internet infrastructure retains no logs.
+## Data behaviour
+- Search history is not retained by the application.
+- Every research request is independent.
+- Optional Saved Info is stored locally in the browser and sent with each research request. It is not synced between devices.
+- Export Saved Info before clearing browser site data or changing devices.
 
 ## Testing status
-
-The revised JavaScript files are syntax-checked and the ZIP archive is integrity-checked before packaging. The Worker has not been deployed to the user's Cloudflare account from this environment. Live provider calls, GitHub Pages deployment, iPhone Safari and Windows browser behaviour therefore remain unverified.
-
-## Next development boundary
-
-Do not add AI. Do not add search memory. Improve deterministic source coverage and the structured presentation in small, testable steps. In particular, a future version needs explicit source integrations for film/TV identifiers and credits, news and future releases, regional availability, and relationship verification. Do not present unsupported research capabilities as implemented.
+Static checks are performed during packaging. No live provider API call or deployment to the user's GitHub or Cloudflare account is claimed. iPhone Safari and Windows browser testing remain to be performed after deployment.
