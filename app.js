@@ -2,19 +2,21 @@
   "use strict";
 
   const $ = id => document.getElementById(id);
-  const ENDPOINT = (window.ENTERTAINMENT_API_ENDPOINT || "").replace(/\/+$/, "");
-  const KEYS = { api: "er_key", provider: "er_provider", model: "er_model", info: "er_saved_info", draft: "er_saved_draft" };
+  const ENDPOINT = (window.ENTERTAINMENT_API_ENDPOINT || "/api").replace(/\/+$/, "");
+  const KEYS = { provider: "er_provider", info: "er_saved_info", draft: "er_saved_draft" };
+  const apiKeyStorageName = provider => "er_key_" + provider;
+  const modelStorageName = provider => "er_model_" + provider;
 
   function storageGet(key) {
     try { return window.localStorage.getItem(key) || ""; }
-    catch (error) { throw new Error("Browser storage is unavailable. Open this app through its GitHub Pages address rather than directly as a file, then try again."); }
+    catch (error) { throw new Error("Browser storage is unavailable. Open this app through its secure hosted address rather than directly as a file, then try again."); }
   }
   function storageSet(key, value) {
     try {
       window.localStorage.setItem(key, value);
       if (window.localStorage.getItem(key) !== value) throw new Error("The browser did not confirm the saved value.");
     } catch (error) {
-      throw new Error("The browser could not save this information. Check that site storage is enabled and that you are using the GitHub Pages address. " + (error && error.name === "QuotaExceededError" ? "Browser storage is full." : ""));
+      throw new Error("The browser could not save this information. Check that site storage is enabled and that you are using the secure hosted application address. " + (error && error.name === "QuotaExceededError" ? "Browser storage is full." : ""));
     }
   }
   function storageDelete(key) {
@@ -31,10 +33,10 @@
     return ({ openai: "OpenAI", anthropic: "Anthropic", google: "Google Gemini" })[provider] || "Unknown provider";
   }
   function header() {
-    let provider = "openai", hasKey = false, hasInfo = false;
+    let provider = "google", hasKey = false, hasInfo = false;
     try {
-      provider = storageGet(KEYS.provider) || "openai";
-      hasKey = !!storageGet(KEYS.api);
+      provider = storageGet(KEYS.provider) || "google";
+      hasKey = !!storageGet(apiKeyStorageName(provider));
       hasInfo = !!storageGet(KEYS.info);
     } catch (error) {
       $("aiStatus").textContent = "Storage Unavailable";
@@ -75,17 +77,17 @@
     if (!$("settings").open) $("settings").showModal();
   }
   async function call(path, key, provider, body = {}) {
-    if (!ENDPOINT) throw new Error("Cloudflare Worker address is not configured in config.js.");
+    if (!ENDPOINT) throw new Error("The application API path is not configured.");
     let response;
     try {
       response = await fetch(ENDPOINT + path, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-API-Key": key, "X-AI-Provider": provider },
-        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, apiKey: key, provider }),
         cache: "no-store"
       });
     } catch (error) {
-      throw new Error("Could not contact the Cloudflare Worker. Check your internet connection, Worker address and deployed CORS configuration.");
+      throw new Error("Could not contact the application backend. Check your internet connection and the Cloudflare Pages deployment.");
     }
     let data = await response.json().catch(() => ({ error: "The Worker returned an unreadable response." }));
     if (!response.ok) {
@@ -105,15 +107,15 @@
     const key = $("apiKey").value.trim();
     const provider = $("provider").value;
     if (!key) return setStatus("keyStatus", "Paste your API key first.");
-    if (!ENDPOINT) return setStatus("keyStatus", "Cloudflare Worker address is not configured.");
+    if (!ENDPOINT) return setStatus("keyStatus", "The application API path is not configured.");
     $("testSave").disabled = true;
     setStatus("keyStatus", "Testing the key with " + providerName(provider) + ". The key has not yet been saved.");
     try {
       await call("/test", key, provider);
-      storageSet(KEYS.api, key);
+      storageSet(apiKeyStorageName(provider), key);
       storageSet(KEYS.provider, provider);
-      storageSet(KEYS.model, $("model").value.trim());
-      if (storageGet(KEYS.api) !== key || storageGet(KEYS.provider) !== provider) {
+      storageSet(modelStorageName(provider), $("model").value.trim());
+      if (storageGet(apiKeyStorageName(provider)) !== key || storageGet(KEYS.provider) !== provider) {
         throw new Error("The connection test passed, but browser storage could not confirm the saved settings.");
       }
       setStatus("keyStatus", "Connection successful. Your key and provider settings have been saved in this browser.");
@@ -144,8 +146,8 @@
     if (!question) return setStatus("status", "Enter a question first.");
     let key, provider, referenceInfo;
     try {
-      key = storageGet(KEYS.api);
-      provider = storageGet(KEYS.provider) || "openai";
+      provider = storageGet(KEYS.provider) || "google";
+      key = storageGet(apiKeyStorageName(provider));
       const saved = storageGet(KEYS.info);
       try { referenceInfo = JSON.parse(saved).text || ""; } catch { referenceInfo = saved; }
     } catch (error) {
@@ -167,7 +169,7 @@
         region: $("region").value,
         spoilers: $("spoilers").value,
         referenceInfo,
-        model: storageGet(KEYS.model)
+        model: storageGet(modelStorageName(provider))
       });
       $("resultBody").innerHTML = renderMarkdown(data.text || "");
       if (Array.isArray(data.citations) && data.citations.length) {
@@ -191,7 +193,14 @@
   $("aiStatus").onclick = openSettings;
   $("infoStatus").onclick = () => { openSettings(); $("savedDraft").focus(); };
   $("closeSettings").onclick = () => $("settings").close();
-  $("provider").onchange = () => { guide(); $("apiKey").value = ""; setStatus("keyStatus", "Provider changed. Test the key for this provider before saving it."); };
+  $("provider").onchange = () => {
+    const selected = $("provider").value;
+    try { $("apiKey").value = storageGet(apiKeyStorageName(selected)); }
+    catch (error) { $("apiKey").value = ""; }
+    $("model").value = "";
+    guide();
+    setStatus("keyStatus", "Provider changed. Test this provider's key before saving it.");
+  };
   $("toggleKey").onclick = () => {
     $("apiKey").type = $("apiKey").type === "password" ? "text" : "password";
     $("toggleKey").textContent = $("apiKey").type === "password" ? "Show" : "Hide";
@@ -200,7 +209,7 @@
   $("testSave").onclick = testAndSave;
   $("clearKey").onclick = () => {
     try {
-      storageDelete(KEYS.api); storageDelete(KEYS.provider); storageDelete(KEYS.model);
+      storageDelete(apiKeyStorageName($("provider").value)); storageSet(KEYS.provider, $("provider").value); storageDelete(modelStorageName($("provider").value));
       $("apiKey").value = ""; $("model").value = "";
       setStatus("keyStatus", "API key and provider settings cleared from this browser.");
       header();
@@ -268,11 +277,11 @@
   };
 
   try {
-    $("provider").value = storageGet(KEYS.provider) || "openai";
-    $("apiKey").value = storageGet(KEYS.api);
-    $("model").value = storageGet(KEYS.model);
+    $("provider").value = storageGet(KEYS.provider) || "google";
+    $("apiKey").value = storageGet(apiKeyStorageName($("provider").value));
+    $("model").value = storageGet(modelStorageName($("provider").value));
     guide(); infoView(); header();
-    if (!storageGet(KEYS.api)) openSettings();
+    if (!storageGet(apiKeyStorageName($("provider").value))) openSettings();
   } catch (error) {
     guide(); setStatus("keyStatus", error.message); header(); openSettings();
   }
