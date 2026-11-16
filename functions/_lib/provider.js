@@ -55,11 +55,23 @@ function providerHeaders(provider, key, jsonBody = false) {
   return headers;
 }
 
+
 async function providerFetch(url, options) {
   try {
     return await fetch(url, { ...options, redirect: "error" });
-  } catch {
-    throw new Error("The Cloudflare Pages backend could not establish a connection to the AI provider. Check the provider service and try again.");
+  } catch (error) {
+    const diagnostic = {
+      host: new URL(url).host,
+      errorName: error?.name || "Unknown",
+      errorMessage: error?.message || String(error),
+      cause: error?.cause ? String(error.cause) : undefined,
+    };
+
+    console.error("Provider connection diagnostic:", diagnostic);
+
+    throw new Error(
+      "The provider request failed before receiving an HTTP response. Check Cloudflare Pages Functions logs for diagnostic details."
+    );
   }
 }
 
