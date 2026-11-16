@@ -58,19 +58,27 @@ function providerHeaders(provider, key, jsonBody = false) {
 
 async function providerFetch(url, options) {
   try {
-    return await fetch(url, { ...options, redirect: "error" });
+    const response = await fetch(url, {
+      ...options,
+      redirect: "manual",
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error(
+        `Provider returned an unexpected redirect (HTTP ${response.status}).`
+      );
+    }
+
+    return response;
   } catch (error) {
-    const diagnostic = {
+    console.error("Provider connection diagnostic:", {
       host: new URL(url).host,
       errorName: error?.name || "Unknown",
       errorMessage: error?.message || String(error),
-      cause: error?.cause ? String(error.cause) : undefined,
-    };
-
-    console.error("Provider connection diagnostic:", diagnostic);
+    });
 
     throw new Error(
-      "The provider request failed before receiving an HTTP response. Check Cloudflare Pages Functions logs for diagnostic details."
+      error?.message || "The provider connection failed."
     );
   }
 }
