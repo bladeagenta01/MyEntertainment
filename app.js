@@ -3,9 +3,15 @@
 
   const $ = id => document.getElementById(id);
   const ENDPOINT = (window.ENTERTAINMENT_API_ENDPOINT || "/api").replace(/\/+$/, "");
-  const KEYS = { provider: "er_provider", info: "er_saved_info", draft: "er_saved_draft" };
+  const KEYS = { provider: "er_provider", mode: "er_mode", webSearch: "er_web_search", info: "er_saved_info", draft: "er_saved_draft" };
+  const PROFILE_OPTIONS = {
+    google: [{ id: "free", label: "Google Free Tier" }, { id: "paid", label: "Google Paid / Billing Enabled" }],
+    openai: [{ id: "credits", label: "Free or Promotional API Credits" }, { id: "funded", label: "Funded API Usage" }],
+    anthropic: [{ id: "trial", label: "Initial Trial Credits" }, { id: "funded", label: "Prepaid or Contract Usage" }]
+  };
   const apiKeyStorageName = provider => "er_key_" + provider;
   const modelStorageName = provider => "er_model_" + provider;
+  const profileStorageName = provider => "er_profile_" + provider;
 
   function storageGet(key) {
     try { return window.localStorage.getItem(key) || ""; }
@@ -47,6 +53,23 @@
     $("aiStatus").textContent = hasKey ? "Connected (" + providerName(provider) + ")" : "Setup Required";
     $("aiStatus").className = "pill " + (hasKey ? "green" : "amber");
     $("infoStatus").textContent = hasInfo ? "Info Loaded" : "No Info Saved";
+  }
+  function refreshProfiles() {
+    const provider = $("provider").value;
+    const options = PROFILE_OPTIONS[provider] || [];
+    const saved = storageGet(profileStorageName(provider));
+    $("providerProfile").innerHTML = options.map(option => `<option value="${esc(option.id)}">${esc(option.label)}</option>`).join("");
+    $("providerProfile").value = options.some(option => option.id === saved) ? saved : options[0]?.id || "";
+  }
+  function applyModeDefaults() {
+    const production = $("mode").value === "production";
+    $("webSearch").checked = production;
+    try { storageSet(KEYS.webSearch, production ? "true" : "false"); } catch (error) { setStatus("keyStatus", error.message); }
+    $("depth").querySelectorAll('option[value="3"], option[value="4"]').forEach(option => { option.disabled = !production; });
+    $("depth").value = production ? "2" : "1";
+    setStatus("keyStatus", production
+      ? "Production Mode selected. Full research depth and live web search are available. Provider charges may apply."
+      : "Testing Mode selected. Conservative limits are active and live web search is off by default.");
   }
   function guide() {
     const provider = $("provider").value;
@@ -115,10 +138,12 @@
       storageSet(apiKeyStorageName(provider), key);
       storageSet(KEYS.provider, provider);
       storageSet(modelStorageName(provider), $("model").value.trim());
+      storageSet(KEYS.mode, $("mode").value);
+      storageSet(profileStorageName(provider), $("providerProfile").value);
       if (storageGet(apiKeyStorageName(provider)) !== key || storageGet(KEYS.provider) !== provider) {
         throw new Error("The connection test passed, but browser storage could not confirm the saved settings.");
       }
-      setStatus("keyStatus", "Connection successful. Your key and provider settings have been saved in this browser.");
+      setStatus("keyStatus", "Connection successful. Your key and provider settings have been saved in this browser. This confirms authentication only, not available generation or search quota.");
       header();
     } catch (error) {
       setStatus("keyStatus", friendly(error));
@@ -126,6 +151,27 @@
       $("testSave").disabled = false;
     }
   }
+  async function loadModels() {
+    const provider = $("provider").value;
+    const key = $("apiKey").value.trim() || storageGet(apiKeyStorageName(provider));
+    if (!key) return setStatus("keyStatus", "Enter or save this provider's API key before loading its models.");
+    const button = $("loadModels");
+    button.disabled = true;
+    setStatus("keyStatus", "Loading models available to this API key.");
+    try {
+      const data = await call("/models", key, provider);
+      const select = $("modelList");
+      select.innerHTML = '<option value="">Select an available model</option>' + (data.models || []).map(item =>
+        `<option value="${esc(item.id)}">${esc(item.displayName && item.displayName !== item.id ? item.displayName + " (" + item.id + ")" : item.id)}</option>`
+      ).join("");
+      const current = $("model").value.trim() || storageGet(modelStorageName(provider));
+      if (current && (data.models || []).some(item => item.id === current)) select.value = current;
+      setStatus("keyStatus", `${data.count} model(s) returned by ${providerName(provider)}. Select one, or enter an exact model ID manually. The list does not guarantee access to every API feature.`);
+    } catch (error) {
+      setStatus("keyStatus", friendly(error));
+    } finally { button.disabled = false; }
+  }
+
   function renderMarkdown(markdown) {
     let html = esc(markdown);
     html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>")
@@ -144,6 +190,9 @@
   async function search() {
     const question = $("query").value.trim();
     if (!question) return setStatus("status", "Enter a question first.");
+    const mode = $("mode").value;
+    const maxLength = mode === "production" ? 4000 : 1200;
+    if (question.length > maxLength) return setStatus("status", `Your question is too long for ${mode === "production" ? "Production" : "Testing"} Mode. Maximum ${maxLength} characters.`);
     let key, provider, referenceInfo;
     try {
       provider = storageGet(KEYS.provider) || "google";
@@ -169,7 +218,10 @@
         region: $("region").value,
         spoilers: $("spoilers").value,
         referenceInfo,
-        model: storageGet(modelStorageName(provider))
+        model: $("model").value.trim() || storageGet(modelStorageName(provider)),
+        mode,
+        providerProfile: storageGet(profileStorageName(provider)) || $("providerProfile").value,
+        webSearch: $("webSearch").checked
       });
       $("resultBody").innerHTML = renderMarkdown(data.text || "");
       if (Array.isArray(data.citations) && data.citations.length) {
@@ -180,7 +232,7 @@
           "</ol>");
       }
       $("results").classList.remove("hidden");
-      setStatus("status", "Research complete. Review the cited sources and verify important details.");
+      setStatus("status", `Research complete (${mode === "production" ? "Production" : "Testing"} Mode). ${$("webSearch").checked ? "Live web search was enabled." : "Live web search was disabled, so current claims may not be verified."} Review sources and verify important details.`);
       $("results").scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       setStatus("status", friendly(error));
@@ -197,7 +249,9 @@
     const selected = $("provider").value;
     try { $("apiKey").value = storageGet(apiKeyStorageName(selected)); }
     catch (error) { $("apiKey").value = ""; }
-    $("model").value = "";
+    $("model").value = storageGet(modelStorageName(selected));
+    refreshProfiles();
+    $("modelList").innerHTML = '<option value="">Load the model list first</option>';
     guide();
     setStatus("keyStatus", "Provider changed. Test this provider's key before saving it.");
   };
@@ -207,6 +261,46 @@
   };
   $("apiKey").addEventListener("paste", () => setTimeout(() => { $("apiKey").value = $("apiKey").value.trim(); }, 0));
   $("testSave").onclick = testAndSave;
+  $("loadModels").onclick = loadModels;
+  $("modelList").onchange = () => {
+    if ($("modelList").value) {
+      $("model").value = $("modelList").value;
+      try { storageSet(modelStorageName($("provider").value), $("model").value); }
+      catch (error) { setStatus("keyStatus", error.message); }
+    }
+  };
+  $("model").onchange = () => {
+    try { storageSet(modelStorageName($("provider").value), $("model").value.trim()); }
+    catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("mode").onchange = () => {
+    try { storageSet(KEYS.mode, $("mode").value); } catch (error) { setStatus("keyStatus", error.message); }
+    applyModeDefaults();
+  };
+  $("webSearch").onchange = () => {
+    try { storageSet(KEYS.webSearch, String($("webSearch").checked)); }
+    catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("providerProfile").onchange = () => {
+    try { storageSet(profileStorageName($("provider").value), $("providerProfile").value); }
+    catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("testResearch").onclick = async () => {
+    const provider = $("provider").value;
+    const key = $("apiKey").value.trim() || storageGet(apiKeyStorageName(provider));
+    if (!key) return setStatus("keyStatus", "Enter an API key and select Test & Save Key first.");
+    const button = $("testResearch");
+    button.disabled = true;
+    setStatus("keyStatus", "Testing a small AI generation request without live web search.");
+    try {
+      const result = await call("/test-generation", key, provider, {
+        model: $("model").value.trim() || storageGet(modelStorageName(provider))
+      });
+      setStatus("keyStatus", "AI generation test passed. This confirms a basic model response without web search. It does not test live search grounding or prove that future requests are free.");
+    } catch (error) {
+      setStatus("keyStatus", friendly(error));
+    } finally { button.disabled = false; }
+  };
   $("clearKey").onclick = () => {
     try {
       storageDelete(apiKeyStorageName($("provider").value)); storageSet(KEYS.provider, $("provider").value); storageDelete(modelStorageName($("provider").value));
@@ -278,8 +372,14 @@
 
   try {
     $("provider").value = storageGet(KEYS.provider) || "google";
+    $("mode").value = storageGet(KEYS.mode) || "testing";
     $("apiKey").value = storageGet(apiKeyStorageName($("provider").value));
     $("model").value = storageGet(modelStorageName($("provider").value));
+    const savedWebSearch = storageGet(KEYS.webSearch);
+    $("webSearch").checked = savedWebSearch ? savedWebSearch === "true" : $("mode").value === "production";
+    $("depth").querySelectorAll('option[value="3"], option[value="4"]').forEach(option => { option.disabled = $("mode").value !== "production"; });
+    if ($("mode").value === "testing" && Number($("depth").value) > 2) $("depth").value = "2";
+    refreshProfiles();
     guide(); infoView(); header();
     if (!storageGet(apiKeyStorageName($("provider").value))) openSettings();
   } catch (error) {

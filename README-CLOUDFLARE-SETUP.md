@@ -27,12 +27,15 @@ Cloudflare Pages Functions are discovered from the root-level `functions` direct
 Open the new `pages.dev` URL. Then test:
 - The application loads without a 404.
 - Settings opens.
+- Open Settings and confirm Testing Mode is selected.
 - Select Google Gemini and enter your own key.
-- Select Test & Save Key.
-- A successful test confirms the key was accepted by the provider's models endpoint. It does not prove that a complete research request works.
-- Run a small research question and inspect the response and source links.
+- Select Test & Save Key. This confirms authentication only.
+- Select Load Models and choose a model returned for your key.
+- Select Test AI Generation. This checks a small model response without live web search.
+- If generation works, run one short research question with live web search disabled.
+- Only then enable live web search and run a separate short test. Google Search grounding can have a separate quota.
 
-After that, test OpenAI and Anthropic only if you have their own API keys and billing enabled.
+Do not enable paid billing simply to complete these tests. OpenAI and Anthropic can be tested only if you already have keys and usable API credits or an existing funded account. The application cannot guarantee that a request will be free.
 
 ## 4. Important
 - Do not paste API keys into GitHub, Cloudflare source code, screenshots or chat.

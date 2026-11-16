@@ -86,6 +86,18 @@
 <dialog id="settings">
   <div class="resulttop"><h2>Settings</h2><button id="closeSettings">Close</button></div>
   <section>
+    <h3>Operating mode and usage profile</h3>
+    <label for="mode">Application mode</label>
+    <select id="mode">
+      <option value="testing" selected>Testing Mode. Conservative settings</option>
+      <option value="production">Production Mode. Full research settings</option>
+    </select>
+    <p class="small">Testing Mode limits research depth and input size. Production Mode restores the full depth range and larger request limits.</p>
+    <label for="providerProfile">Provider account profile</label>
+    <select id="providerProfile"></select>
+    <p class="privacy">This profile is a label you choose. The app cannot inspect your provider billing balance or prove that a request is free. Provider-side billing and spend limits remain the final financial safeguard. Do not enable provider billing solely to make this pilot work.</p>
+    <label class="checkline"><input id="webSearch" type="checkbox"> Enable live web search for research requests</label>
+    <p class="small">In Testing Mode, live web search starts disabled to help isolate model-generation and quota issues. Turning it on may use separate provider search or grounding quotas.</p>
     <h3>AI connection</h3>
     <label for="provider">AI provider</label>
     <select id="provider">
@@ -96,10 +108,13 @@
     <label for="apiKey">API key</label>
     <div class="grid keyrow"><input id="apiKey" type="password" autocomplete="off" placeholder="Paste your API key"><button id="toggleKey">Show</button></div>
     <p class="privacy">Your key is stored separately for each provider in this browser after a successful connection test. It is sent over HTTPS to the Cloudflare Pages backend, which forwards it to your selected AI provider for that request. The backend does not intentionally store, log or cache your key. Browser storage is not encrypted. Use a trusted device.</p>
-    <label for="model">Model (optional)</label>
-    <input id="model" placeholder="Leave blank to use the provider default">
-    <div class="actions"><button id="testSave" class="primary">Test &amp; Save Key</button><button id="clearKey">Clear / Forget Selected Key</button></div>
+    <label for="modelList">Models available to this API key</label>
+    <div class="grid keyrow"><select id="modelList"><option value="">Load the model list first</option></select><button id="loadModels">Load Models</button></div>
+    <label for="model">Selected model ID or manual override</label>
+    <input id="model" placeholder="Select a model above or enter its exact API model ID">
+    <div class="actions"><button id="testSave" class="primary">Test &amp; Save Key</button><button id="testResearch">Test AI Generation</button><button id="clearKey">Clear / Forget Selected Key</button></div>
     <p id="keyStatus" role="status"></p>
+    <p class="small">Test &amp; Save Key checks authentication only. Test AI Generation sends a small request without live web search. A successful key test does not prove that research generation or search grounding has available quota.</p>
     <details><summary>Need a key? Step-by-step instructions</summary><div id="guide"></div></details>
   </section>
   <section id="saved">

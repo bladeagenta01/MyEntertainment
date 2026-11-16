@@ -16,12 +16,18 @@ The runtime system prompt is embedded in `functions/_lib/research-prompt.js`. Th
 | User-supplied saved reference information | `app.js`, localStorage and provider prompt builder |
 | Independent searches, no search history | `app.js` and master prompt |
 | Multi-provider BYOK | `functions/_lib/provider.js` |
+| Dynamic provider model list | `functions/api/models.js`, provider model-list adapters and Settings model selector |
+| Testing and Production modes | `functions/_lib/provider-profiles.js`, `app.js`, `index.html`, `functions/_lib/provider.js` |
+| Separate authentication and generation tests | `functions/api/test.js`, `functions/api/test-generation.js` |
+| Provider-specific usage profile labels | `functions/_lib/provider-profiles.js`, `app.js` |
 | Same-origin backend requests | `config.js`, `functions/api/*` |
 | Private source repository and automatic deployment | Cloudflare Pages Git integration |
 
 ## Provider-specific research integration
-- Google Gemini: `generateContent` with Google Search grounding. Default `gemini-3.8-flash`.
-- OpenAI: Responses API with the `web_search` tool. Default `gpt-6-astra`.
-- Anthropic: Messages API with the web search tool. Default `claude-sonnet-5-5`.
+- Google Gemini: `generateContent` with optional Google Search grounding. The app retrieves models advertising `generateContent` from the selected account.
+- OpenAI: Responses API with optional `web_search`. Models are retrieved from the account model-list endpoint.
+- Anthropic: Messages API with optional web search. Models are retrieved from the account model-list endpoint.
 
-A successful API-key test only verifies that the provider accepts the key at its models endpoint. It does not guarantee the selected model supports the requested search feature or that a full research request will succeed.
+No hard-coded model default is assumed in this revision. The user selects a model returned by the provider or enters an exact model ID manually. A model-list result does not guarantee access to every tool or feature.
+
+A successful API-key test only verifies that the provider accepts the key at its models endpoint. The separate generation test checks a small model response without web search. Neither guarantees that a full research request or search tool will succeed.

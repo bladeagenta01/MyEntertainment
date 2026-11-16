@@ -5,7 +5,7 @@ This package is a new deployment architecture for the Entertainment Research Exp
 
 ### What is included
 - Browser application: `index.html`, `styles.css`, `app.js`, `config.js`
-- Cloudflare Pages API: `functions/api/test.js` and `functions/api/research.js`
+- Cloudflare Pages API: `functions/api/test.js`, `functions/api/models.js`, `functions/api/test-generation.js` and `functions/api/research.js`
 - Shared provider handling: `functions/_lib/provider.js`
 - Embedded research prompt: `functions/_lib/research-prompt.js`
 - Pages route configuration: `_routes.json`
@@ -13,13 +13,20 @@ This package is a new deployment architecture for the Entertainment Research Exp
 - Deployment and maintenance instructions.
 
 ### Supported providers
-- Google Gemini. Initial test provider. Default model: `gemini-3.8-flash`.
-- OpenAI. Default model: `gpt-6-astra`.
-- Anthropic Claude. Default model: `claude-sonnet-5-5`.
+- Google Gemini.
+- OpenAI.
+- Anthropic Claude.
 
-Provider models can change. The model field is optional and can be used to enter another model ID supported by the selected provider and account. Provider/model availability is not guaranteed by this application.
+The app retrieves the model list using the selected provider key. Select a returned model or enter an exact model ID manually. Model-list membership does not guarantee that every API feature is available for that model; use Test AI Generation to check basic generation access.
 
 OpenAI's Responses API uses its `web_search` tool. Gemini uses Google Search grounding. Anthropic uses its Messages API web search tool. Search and citation behaviour differs between providers.
+
+### Operating modes and provider usage profiles
+- Testing Mode is the default. It caps research depth at Level 2, limits question length to 1,200 characters and reference information to 4,000 characters, and starts with live web search disabled. Anthropic web-search use is capped at one use when enabled. OpenAI web-search context is set to low when enabled.
+- Production Mode permits research depth 1 to 4, questions up to 4,000 characters and reference information up to 30,000 characters. Provider web-search tools are enabled when the user selects live web search.
+- The provider account profile is descriptive only. The app cannot inspect balances, determine whether credits are free, or guarantee that a request will not be billed.
+- The separate Test & Save Key button checks provider authentication. Test AI Generation sends a small provider-specific generation request without the full research prompt or live web search. Neither test proves that live search grounding or future requests have available free quota.
+- Provider billing and spending limits are the final financial safeguard. Review provider billing settings before using Production Mode. Do not rely on app-side limits as a guarantee against charges.
 
 ### Security and privacy
 - There is no developer-owned AI key.
