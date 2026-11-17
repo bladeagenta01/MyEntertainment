@@ -2,19 +2,28 @@
   "use strict";
 
   const $ = id => document.getElementById(id);
-  const ENDPOINT = (window.ENTERTAINMENT_API_ENDPOINT || "").replace(/\/+$/, "");
-  const KEYS = { api: "er_key", provider: "er_provider", model: "er_model", info: "er_saved_info", draft: "er_saved_draft" };
+  const ENDPOINT = (window.ENTERTAINMENT_API_ENDPOINT || "/api").replace(/\/+$/, "");
+  const KEYS = { searchKey: "er_search_key", provider: "er_provider", mode: "er_mode", webSearch: "er_web_search", info: "er_saved_info", draft: "er_saved_draft" };
+  const PROFILE_OPTIONS = {
+    google: [{ id: "free", label: "Google Free Tier" }, { id: "paid", label: "Google Paid / Billing Enabled" }],
+    openai: [{ id: "credits", label: "Free or Promotional API Credits" }, { id: "funded", label: "Funded API Usage" }],
+    anthropic: [{ id: "trial", label: "Initial Trial Credits" }, { id: "funded", label: "Prepaid or Contract Usage" }]
+  };
+  const apiKeyStorageName = provider => "er_key_" + provider;
+  const modelStorageName = provider => "er_model_" + provider;
+  const profileStorageName = provider => "er_profile_" + provider;
+  const allowChargesStorageName = provider => "er_allow_charges_" + provider;
 
   function storageGet(key) {
     try { return window.localStorage.getItem(key) || ""; }
-    catch (error) { throw new Error("Browser storage is unavailable. Open this app through its GitHub Pages address rather than directly as a file, then try again."); }
+    catch (error) { throw new Error("Browser storage is unavailable. Open this app through its secure hosted address rather than directly as a file, then try again."); }
   }
   function storageSet(key, value) {
     try {
       window.localStorage.setItem(key, value);
       if (window.localStorage.getItem(key) !== value) throw new Error("The browser did not confirm the saved value.");
     } catch (error) {
-      throw new Error("The browser could not save this information. Check that site storage is enabled and that you are using the GitHub Pages address. " + (error && error.name === "QuotaExceededError" ? "Browser storage is full." : ""));
+      throw new Error("The browser could not save this information. Check that site storage is enabled and that you are using the secure hosted application address. " + (error && error.name === "QuotaExceededError" ? "Browser storage is full." : ""));
     }
   }
   function storageDelete(key) {
@@ -31,10 +40,10 @@
     return ({ openai: "OpenAI", anthropic: "Anthropic", google: "Google Gemini" })[provider] || "Unknown provider";
   }
   function header() {
-    let provider = "openai", hasKey = false, hasInfo = false;
+    let provider = "google", hasKey = false, hasInfo = false;
     try {
-      provider = storageGet(KEYS.provider) || "openai";
-      hasKey = !!storageGet(KEYS.api);
+      provider = storageGet(KEYS.provider) || "google";
+      hasKey = !!storageGet(apiKeyStorageName(provider));
       hasInfo = !!storageGet(KEYS.info);
     } catch (error) {
       $("aiStatus").textContent = "Storage Unavailable";
@@ -45,6 +54,25 @@
     $("aiStatus").textContent = hasKey ? "Connected (" + providerName(provider) + ")" : "Setup Required";
     $("aiStatus").className = "pill " + (hasKey ? "green" : "amber");
     $("infoStatus").textContent = hasInfo ? "Info Loaded" : "No Info Saved";
+  }
+  function refreshProfiles() {
+    const provider = $("provider").value;
+    const options = PROFILE_OPTIONS[provider] || [];
+    const saved = storageGet(profileStorageName(provider));
+    $("providerProfile").innerHTML = options.map(option => `<option value="${esc(option.id)}">${esc(option.label)}</option>`).join("");
+    $("providerProfile").value = options.some(option => option.id === saved) ? saved : options[0]?.id || "";
+  }
+  function applyModeDefaults() {
+    const production = $("mode").value === "production";
+    if (!production) {
+      $("webSearch").checked = false;
+      try { storageSet(KEYS.webSearch, "false"); } catch (error) { setStatus("keyStatus", error.message); }
+    }
+    $("depth").querySelectorAll('option[value="3"], option[value="4"]').forEach(option => { option.disabled = !production; });
+    if (!production && Number($("depth").value) > 2) $("depth").value = "2";
+    setStatus("keyStatus", production
+      ? "Production Mode selected. Full research depth is available. Live web search remains off until you enable it. API generation still requires explicit charge authorisation."
+      : "Testing Mode selected. Conservative limits are active. Live web search and API generation authorisation are off by default.");
   }
   function guide() {
     const provider = $("provider").value;
@@ -75,17 +103,17 @@
     if (!$("settings").open) $("settings").showModal();
   }
   async function call(path, key, provider, body = {}) {
-    if (!ENDPOINT) throw new Error("Cloudflare Worker address is not configured in config.js.");
+    if (!ENDPOINT) throw new Error("The application API path is not configured.");
     let response;
     try {
       response = await fetch(ENDPOINT + path, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-User-API-Key": key, "X-AI-Provider": provider },
-        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, apiKey: key, provider }),
         cache: "no-store"
       });
     } catch (error) {
-      throw new Error("Could not contact the Cloudflare Worker. Check your internet connection, Worker address and deployed CORS configuration.");
+      throw new Error("Could not contact the application backend. Check your internet connection and the Cloudflare Pages deployment.");
     }
     let data = await response.json().catch(() => ({ error: "The Worker returned an unreadable response." }));
     if (!response.ok) {
@@ -105,18 +133,20 @@
     const key = $("apiKey").value.trim();
     const provider = $("provider").value;
     if (!key) return setStatus("keyStatus", "Paste your API key first.");
-    if (!ENDPOINT) return setStatus("keyStatus", "Cloudflare Worker address is not configured.");
+    if (!ENDPOINT) return setStatus("keyStatus", "The application API path is not configured.");
     $("testSave").disabled = true;
     setStatus("keyStatus", "Testing the key with " + providerName(provider) + ". The key has not yet been saved.");
     try {
       await call("/test", key, provider);
-      storageSet(KEYS.api, key);
+      storageSet(apiKeyStorageName(provider), key);
       storageSet(KEYS.provider, provider);
-      storageSet(KEYS.model, $("model").value.trim());
-      if (storageGet(KEYS.api) !== key || storageGet(KEYS.provider) !== provider) {
+      storageSet(modelStorageName(provider), $("model").value.trim());
+      storageSet(KEYS.mode, $("mode").value);
+      storageSet(profileStorageName(provider), $("providerProfile").value);
+      if (storageGet(apiKeyStorageName(provider)) !== key || storageGet(KEYS.provider) !== provider) {
         throw new Error("The connection test passed, but browser storage could not confirm the saved settings.");
       }
-      setStatus("keyStatus", "Connection successful. Your key and provider settings have been saved in this browser.");
+      setStatus("keyStatus", "Connection successful. Your key and provider settings have been saved in this browser. This confirms authentication only, not available generation or search quota.");
       header();
     } catch (error) {
       setStatus("keyStatus", friendly(error));
@@ -124,6 +154,27 @@
       $("testSave").disabled = false;
     }
   }
+  async function loadModels() {
+    const provider = $("provider").value;
+    const key = $("apiKey").value.trim() || storageGet(apiKeyStorageName(provider));
+    if (!key) return setStatus("keyStatus", "Enter or save this provider's API key before loading its models.");
+    const button = $("loadModels");
+    button.disabled = true;
+    setStatus("keyStatus", "Loading models available to this API key.");
+    try {
+      const data = await call("/models", key, provider);
+      const select = $("modelList");
+      select.innerHTML = '<option value="">Select an available model</option>' + (data.models || []).map(item =>
+        `<option value="${esc(item.id)}">${esc(item.displayName && item.displayName !== item.id ? item.displayName + " (" + item.id + ")" : item.id)}</option>`
+      ).join("");
+      const current = $("model").value.trim() || storageGet(modelStorageName(provider));
+      if (current && (data.models || []).some(item => item.id === current)) select.value = current;
+      setStatus("keyStatus", `${data.count} model(s) returned by ${providerName(provider)}. Select one, or enter an exact model ID manually. The list does not guarantee access to every API feature.`);
+    } catch (error) {
+      setStatus("keyStatus", friendly(error));
+    } finally { button.disabled = false; }
+  }
+
   function renderMarkdown(markdown) {
     let html = esc(markdown);
     html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>")
@@ -140,12 +191,16 @@
     return "<p>" + html + "</p>";
   }
   async function search() {
+    if (!$("allowCharges").checked) return setStatus("status", "AI generation is blocked. Open Settings and explicitly authorise API requests that may consume credits or incur charges.");
     const question = $("query").value.trim();
     if (!question) return setStatus("status", "Enter a question first.");
+    const mode = $("mode").value;
+    const maxLength = mode === "production" ? 4000 : 1200;
+    if (question.length > maxLength) return setStatus("status", `Your question is too long for ${mode === "production" ? "Production" : "Testing"} Mode. Maximum ${maxLength} characters.`);
     let key, provider, referenceInfo;
     try {
-      key = storageGet(KEYS.api);
-      provider = storageGet(KEYS.provider) || "openai";
+      provider = storageGet(KEYS.provider) || "google";
+      key = storageGet(apiKeyStorageName(provider));
       const saved = storageGet(KEYS.info);
       try { referenceInfo = JSON.parse(saved).text || ""; } catch { referenceInfo = saved; }
     } catch (error) {
@@ -158,7 +213,8 @@
       return;
     }
     $("searchBtn").disabled = true;
-    setStatus("status", "Researching online. Deeper research may take longer and may cost more through your provider.");
+    if ($("webSearch").checked && !storageGet(KEYS.searchKey)) { $("searchBtn").disabled = false; setStatus("status", "Test and save a Tavily Search API key in Settings before enabling independent web search."); openSettings(); return; }
+    setStatus("status", "Searching the web independently, then asking the selected AI model to analyse the retrieved sources.");
     try {
       const data = await call("/research", key, provider, {
         query: question,
@@ -167,7 +223,12 @@
         region: $("region").value,
         spoilers: $("spoilers").value,
         referenceInfo,
-        model: storageGet(KEYS.model)
+        model: $("model").value.trim() || storageGet(modelStorageName(provider)),
+        mode,
+        providerProfile: storageGet(profileStorageName(provider)) || $("providerProfile").value,
+        allowCharges: $("allowCharges").checked,
+        webSearch: $("webSearch").checked,
+        searchApiKey: storageGet(KEYS.searchKey)
       });
       $("resultBody").innerHTML = renderMarkdown(data.text || "");
       if (Array.isArray(data.citations) && data.citations.length) {
@@ -178,7 +239,7 @@
           "</ol>");
       }
       $("results").classList.remove("hidden");
-      setStatus("status", "Research complete. Review the cited sources and verify important details.");
+      setStatus("status", `Research complete (${mode === "production" ? "Production" : "Testing"} Mode). ${$("webSearch").checked ? "Independent Tavily web search was enabled." : "Independent web search was disabled, so current claims may not be verified."} Review sources and verify important details.`);
       $("results").scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       setStatus("status", friendly(error));
@@ -191,16 +252,93 @@
   $("aiStatus").onclick = openSettings;
   $("infoStatus").onclick = () => { openSettings(); $("savedDraft").focus(); };
   $("closeSettings").onclick = () => $("settings").close();
-  $("provider").onchange = () => { guide(); $("apiKey").value = ""; setStatus("keyStatus", "Provider changed. Test the key for this provider before saving it."); };
+  $("provider").onchange = () => {
+    const selected = $("provider").value;
+    try { $("apiKey").value = storageGet(apiKeyStorageName(selected)); }
+    catch (error) { $("apiKey").value = ""; }
+    $("model").value = storageGet(modelStorageName(selected));
+    refreshProfiles();
+    $("allowCharges").checked = storageGet(allowChargesStorageName(selected)) === "true";
+    $("modelList").innerHTML = '<option value="">Load the model list first</option>';
+    guide();
+    setStatus("keyStatus", "Provider changed. Test this provider's key before saving it.");
+  };
+  $("searchApiKey").value = storageGet(KEYS.searchKey);
+  $("toggleSearchKey").onclick = () => {
+    $("searchApiKey").type = $("searchApiKey").type === "password" ? "text" : "password";
+    $("toggleSearchKey").textContent = $("searchApiKey").type === "password" ? "Show" : "Hide";
+  };
+  $("testSearch").onclick = async () => {
+    const key = $("searchApiKey").value.trim();
+    if (!key) return setStatus("searchStatus", "Paste your Tavily API key first.");
+    const button = $("testSearch"); button.disabled = true;
+    setStatus("searchStatus", "Testing independent web search connection.");
+    try {
+      const response = await fetch(ENDPOINT + "/search-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ searchApiKey: key }), cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Search test failed.");
+      storageSet(KEYS.searchKey, key);
+      $("searchApiKey").value = key;
+      setStatus("searchStatus", data.message + " The key has been saved in this browser.");
+    } catch (error) { setStatus("searchStatus", error.message || "Search test failed."); }
+    finally { button.disabled = false; }
+  };
   $("toggleKey").onclick = () => {
     $("apiKey").type = $("apiKey").type === "password" ? "text" : "password";
     $("toggleKey").textContent = $("apiKey").type === "password" ? "Show" : "Hide";
   };
   $("apiKey").addEventListener("paste", () => setTimeout(() => { $("apiKey").value = $("apiKey").value.trim(); }, 0));
   $("testSave").onclick = testAndSave;
+  $("loadModels").onclick = loadModels;
+  $("modelList").onchange = () => {
+    if ($("modelList").value) {
+      $("model").value = $("modelList").value;
+      try { storageSet(modelStorageName($("provider").value), $("model").value); }
+      catch (error) { setStatus("keyStatus", error.message); }
+    }
+  };
+  $("model").onchange = () => {
+    try { storageSet(modelStorageName($("provider").value), $("model").value.trim()); }
+    catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("mode").onchange = () => {
+    try { storageSet(KEYS.mode, $("mode").value); } catch (error) { setStatus("keyStatus", error.message); }
+    applyModeDefaults();
+  };
+  $("webSearch").onchange = () => {
+    if ($("webSearch").checked && !storageGet(KEYS.searchKey)) { $("webSearch").checked = false; setStatus("keyStatus", "Test and save a Tavily Search API key before enabling independent web search."); return; }
+    try { storageSet(KEYS.webSearch, String($("webSearch").checked)); }
+    catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("allowCharges").onchange = () => {
+    try { storageSet(allowChargesStorageName($("provider").value), String($("allowCharges").checked)); }
+    catch (error) { $("allowCharges").checked = false; setStatus("keyStatus", error.message); }
+  };
+  $("providerProfile").onchange = () => {
+    try { storageSet(profileStorageName($("provider").value), $("providerProfile").value); }
+    catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("testResearch").onclick = async () => {
+    const provider = $("provider").value;
+    const key = $("apiKey").value.trim() || storageGet(apiKeyStorageName(provider));
+    if (!key) return setStatus("keyStatus", "Enter an API key and select Test & Save Key first.");
+    if (!$("allowCharges").checked) return setStatus("keyStatus", "AI generation is blocked. Explicitly authorise requests that may consume credits or incur charges before running this test.");
+    const button = $("testResearch");
+    button.disabled = true;
+    setStatus("keyStatus", "Testing a small AI generation request without live web search.");
+    try {
+      const result = await call("/test-generation", key, provider, {
+        model: $("model").value.trim() || storageGet(modelStorageName(provider)),
+        allowCharges: $("allowCharges").checked
+      });
+      setStatus("keyStatus", "AI generation test passed. This confirms a basic model response without web search. It does not test live search grounding or prove that future requests are free.");
+    } catch (error) {
+      setStatus("keyStatus", friendly(error));
+    } finally { button.disabled = false; }
+  };
   $("clearKey").onclick = () => {
     try {
-      storageDelete(KEYS.api); storageDelete(KEYS.provider); storageDelete(KEYS.model);
+      storageDelete(apiKeyStorageName($("provider").value)); storageSet(KEYS.provider, $("provider").value); storageDelete(modelStorageName($("provider").value)); storageDelete(allowChargesStorageName($("provider").value)); $("allowCharges").checked = false;
       $("apiKey").value = ""; $("model").value = "";
       setStatus("keyStatus", "API key and provider settings cleared from this browser.");
       header();
@@ -268,11 +406,22 @@
   };
 
   try {
-    $("provider").value = storageGet(KEYS.provider) || "openai";
-    $("apiKey").value = storageGet(KEYS.api);
-    $("model").value = storageGet(KEYS.model);
+    $("provider").value = storageGet(KEYS.provider) || "google";
+    $("mode").value = storageGet(KEYS.mode) || "testing";
+    $("apiKey").value = storageGet(apiKeyStorageName($("provider").value));
+    $("model").value = storageGet(modelStorageName($("provider").value));
+    const savedWebSearch = storageGet(KEYS.webSearch);
+    $("webSearch").checked = savedWebSearch === "true";
+    if ($("mode").value === "testing") {
+      $("webSearch").checked = false;
+      try { storageSet(KEYS.webSearch, "false"); } catch (error) { setStatus("keyStatus", error.message); }
+    }
+    $("allowCharges").checked = storageGet(allowChargesStorageName($("provider").value)) === "true";
+    $("depth").querySelectorAll('option[value="3"], option[value="4"]').forEach(option => { option.disabled = $("mode").value !== "production"; });
+    if ($("mode").value === "testing" && Number($("depth").value) > 2) $("depth").value = "2";
+    refreshProfiles();
     guide(); infoView(); header();
-    if (!storageGet(KEYS.api)) openSettings();
+    if (!storageGet(apiKeyStorageName($("provider").value))) openSettings();
   } catch (error) {
     guide(); setStatus("keyStatus", error.message); header(); openSettings();
   }
