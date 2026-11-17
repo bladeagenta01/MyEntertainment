@@ -45,3 +45,17 @@ Static checks and ZIP integrity are performed before distribution. No live provi
 
 ### Source-of-truth rule
 The connected GitHub repository is the master copy. It may remain public during pilot testing and can be made private after the new Pages deployment is verified. Do not make unrecorded code edits in the Cloudflare dashboard. Commit source changes to GitHub and let Cloudflare Pages deploy them.
+
+
+## Provider Usage Profiles and Operating Modes (16 November 2026)
+
+The pilot includes Testing Mode and Production Mode, provider-specific account profile labels, provider model discovery, a separate basic generation test, and an explicit API generation authorisation control. Testing Mode is the default and applies conservative request limits. Live web search is off by default in both modes.
+
+AI generation and research are blocked unless the user explicitly enables the authorisation control in Settings. This is a consent gate, not a billing detector. The application cannot inspect provider credit balances, distinguish a free request from a paid request, or guarantee that a request will remain free. Provider profiles are descriptive labels only. Check provider billing, quotas, model eligibility and automatic-recharge settings before authorising generation.
+
+See `PROVIDER-USAGE-PROFILES.md` for the provider-specific classifications, operating-mode limits and official policy references. The provider API-key authentication check and model-list retrieval do not require generation authorisation. The separate generation test and all research requests do. No automatic provider switching, automatic retry or paid fallback is implemented.
+
+
+## Independent web search revision
+
+The current pilot can use Tavily for web search independently of Gemini, OpenAI or Anthropic. Add and test a separate Tavily API key in Settings, then enable independent live web search. The selected AI provider analyses the returned search extracts. See `INDEPENDENT-SEARCH-ARCHITECTURE.md` before deployment.

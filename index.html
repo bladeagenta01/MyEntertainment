@@ -96,8 +96,15 @@
     <label for="providerProfile">Provider account profile</label>
     <select id="providerProfile"></select>
     <p class="privacy">This profile is a label you choose. The app cannot inspect your provider billing balance or prove that a request is free. Provider-side billing and spend limits remain the final financial safeguard. Do not enable provider billing solely to make this pilot work.</p>
-    <label class="checkline"><input id="webSearch" type="checkbox"> Enable live web search for research requests</label>
-    <p class="small">In Testing Mode, live web search starts disabled to help isolate model-generation and quota issues. Turning it on may use separate provider search or grounding quotas.</p>
+    <label class="checkline"><input id="allowCharges" type="checkbox"> Authorise AI and search requests that may consume paid credits or incur charges</label>
+    <p class="privacy">Off by default. When off, the app blocks AI generation tests and research requests. When on, you authorise requests that may use any available free quota or promotional credits first, but could incur charges if those are unavailable or exhausted. The app cannot read your provider balance or guarantee a free request. Check provider billing and disable auto-recharge with your provider if you want to avoid automatic purchases.</p>
+    <label class="checkline"><input id="webSearch" type="checkbox"> Enable independent live web search for research requests</label>
+    <p class="small">Search runs separately from Gemini, OpenAI or Anthropic. Search has its own provider, key and usage limits. It does not use the AI provider's built-in grounding/search tool.</p>
+    <label for="searchApiKey">Independent web search API key (Tavily)</label>
+    <div class="grid keyrow"><input id="searchApiKey" type="password" autocomplete="off" placeholder="Paste your Tavily API key"><button id="toggleSearchKey">Show</button></div>
+    <p class="privacy">The search key is stored in this browser only after a successful search test. It is sent over HTTPS to Cloudflare for that request and forwarded to Tavily. It is not intentionally stored or logged by the backend. Browser storage is not encrypted.</p>
+    <div class="actions"><button id="testSearch">Test Independent Search</button><a href="https://app.tavily.com/" target="_blank" rel="noopener">Get Tavily API key</a></div>
+    <p id="searchStatus" role="status"></p>
     <h3>AI connection</h3>
     <label for="provider">AI provider</label>
     <select id="provider">

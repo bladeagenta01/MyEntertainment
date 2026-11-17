@@ -3,7 +3,7 @@
 
   const $ = id => document.getElementById(id);
   const ENDPOINT = (window.ENTERTAINMENT_API_ENDPOINT || "/api").replace(/\/+$/, "");
-  const KEYS = { provider: "er_provider", mode: "er_mode", webSearch: "er_web_search", info: "er_saved_info", draft: "er_saved_draft" };
+  const KEYS = { searchKey: "er_search_key", provider: "er_provider", mode: "er_mode", webSearch: "er_web_search", info: "er_saved_info", draft: "er_saved_draft" };
   const PROFILE_OPTIONS = {
     google: [{ id: "free", label: "Google Free Tier" }, { id: "paid", label: "Google Paid / Billing Enabled" }],
     openai: [{ id: "credits", label: "Free or Promotional API Credits" }, { id: "funded", label: "Funded API Usage" }],
@@ -12,6 +12,7 @@
   const apiKeyStorageName = provider => "er_key_" + provider;
   const modelStorageName = provider => "er_model_" + provider;
   const profileStorageName = provider => "er_profile_" + provider;
+  const allowChargesStorageName = provider => "er_allow_charges_" + provider;
 
   function storageGet(key) {
     try { return window.localStorage.getItem(key) || ""; }
@@ -63,13 +64,15 @@
   }
   function applyModeDefaults() {
     const production = $("mode").value === "production";
-    $("webSearch").checked = production;
-    try { storageSet(KEYS.webSearch, production ? "true" : "false"); } catch (error) { setStatus("keyStatus", error.message); }
+    if (!production) {
+      $("webSearch").checked = false;
+      try { storageSet(KEYS.webSearch, "false"); } catch (error) { setStatus("keyStatus", error.message); }
+    }
     $("depth").querySelectorAll('option[value="3"], option[value="4"]').forEach(option => { option.disabled = !production; });
-    $("depth").value = production ? "2" : "1";
+    if (!production && Number($("depth").value) > 2) $("depth").value = "2";
     setStatus("keyStatus", production
-      ? "Production Mode selected. Full research depth and live web search are available. Provider charges may apply."
-      : "Testing Mode selected. Conservative limits are active and live web search is off by default.");
+      ? "Production Mode selected. Full research depth is available. Live web search remains off until you enable it. API generation still requires explicit charge authorisation."
+      : "Testing Mode selected. Conservative limits are active. Live web search and API generation authorisation are off by default.");
   }
   function guide() {
     const provider = $("provider").value;
@@ -188,6 +191,7 @@
     return "<p>" + html + "</p>";
   }
   async function search() {
+    if (!$("allowCharges").checked) return setStatus("status", "AI generation is blocked. Open Settings and explicitly authorise API requests that may consume credits or incur charges.");
     const question = $("query").value.trim();
     if (!question) return setStatus("status", "Enter a question first.");
     const mode = $("mode").value;
@@ -209,7 +213,8 @@
       return;
     }
     $("searchBtn").disabled = true;
-    setStatus("status", "Researching online. Deeper research may take longer and may cost more through your provider.");
+    if ($("webSearch").checked && !storageGet(KEYS.searchKey)) { $("searchBtn").disabled = false; setStatus("status", "Test and save a Tavily Search API key in Settings before enabling independent web search."); openSettings(); return; }
+    setStatus("status", "Searching the web independently, then asking the selected AI model to analyse the retrieved sources.");
     try {
       const data = await call("/research", key, provider, {
         query: question,
@@ -221,7 +226,9 @@
         model: $("model").value.trim() || storageGet(modelStorageName(provider)),
         mode,
         providerProfile: storageGet(profileStorageName(provider)) || $("providerProfile").value,
-        webSearch: $("webSearch").checked
+        allowCharges: $("allowCharges").checked,
+        webSearch: $("webSearch").checked,
+        searchApiKey: storageGet(KEYS.searchKey)
       });
       $("resultBody").innerHTML = renderMarkdown(data.text || "");
       if (Array.isArray(data.citations) && data.citations.length) {
@@ -232,7 +239,7 @@
           "</ol>");
       }
       $("results").classList.remove("hidden");
-      setStatus("status", `Research complete (${mode === "production" ? "Production" : "Testing"} Mode). ${$("webSearch").checked ? "Live web search was enabled." : "Live web search was disabled, so current claims may not be verified."} Review sources and verify important details.`);
+      setStatus("status", `Research complete (${mode === "production" ? "Production" : "Testing"} Mode). ${$("webSearch").checked ? "Independent Tavily web search was enabled." : "Independent web search was disabled, so current claims may not be verified."} Review sources and verify important details.`);
       $("results").scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       setStatus("status", friendly(error));
@@ -251,9 +258,30 @@
     catch (error) { $("apiKey").value = ""; }
     $("model").value = storageGet(modelStorageName(selected));
     refreshProfiles();
+    $("allowCharges").checked = storageGet(allowChargesStorageName(selected)) === "true";
     $("modelList").innerHTML = '<option value="">Load the model list first</option>';
     guide();
     setStatus("keyStatus", "Provider changed. Test this provider's key before saving it.");
+  };
+  $("searchApiKey").value = storageGet(KEYS.searchKey);
+  $("toggleSearchKey").onclick = () => {
+    $("searchApiKey").type = $("searchApiKey").type === "password" ? "text" : "password";
+    $("toggleSearchKey").textContent = $("searchApiKey").type === "password" ? "Show" : "Hide";
+  };
+  $("testSearch").onclick = async () => {
+    const key = $("searchApiKey").value.trim();
+    if (!key) return setStatus("searchStatus", "Paste your Tavily API key first.");
+    const button = $("testSearch"); button.disabled = true;
+    setStatus("searchStatus", "Testing independent web search connection.");
+    try {
+      const response = await fetch(ENDPOINT + "/search-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ searchApiKey: key }), cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Search test failed.");
+      storageSet(KEYS.searchKey, key);
+      $("searchApiKey").value = key;
+      setStatus("searchStatus", data.message + " The key has been saved in this browser.");
+    } catch (error) { setStatus("searchStatus", error.message || "Search test failed."); }
+    finally { button.disabled = false; }
   };
   $("toggleKey").onclick = () => {
     $("apiKey").type = $("apiKey").type === "password" ? "text" : "password";
@@ -278,8 +306,13 @@
     applyModeDefaults();
   };
   $("webSearch").onchange = () => {
+    if ($("webSearch").checked && !storageGet(KEYS.searchKey)) { $("webSearch").checked = false; setStatus("keyStatus", "Test and save a Tavily Search API key before enabling independent web search."); return; }
     try { storageSet(KEYS.webSearch, String($("webSearch").checked)); }
     catch (error) { setStatus("keyStatus", error.message); }
+  };
+  $("allowCharges").onchange = () => {
+    try { storageSet(allowChargesStorageName($("provider").value), String($("allowCharges").checked)); }
+    catch (error) { $("allowCharges").checked = false; setStatus("keyStatus", error.message); }
   };
   $("providerProfile").onchange = () => {
     try { storageSet(profileStorageName($("provider").value), $("providerProfile").value); }
@@ -289,12 +322,14 @@
     const provider = $("provider").value;
     const key = $("apiKey").value.trim() || storageGet(apiKeyStorageName(provider));
     if (!key) return setStatus("keyStatus", "Enter an API key and select Test & Save Key first.");
+    if (!$("allowCharges").checked) return setStatus("keyStatus", "AI generation is blocked. Explicitly authorise requests that may consume credits or incur charges before running this test.");
     const button = $("testResearch");
     button.disabled = true;
     setStatus("keyStatus", "Testing a small AI generation request without live web search.");
     try {
       const result = await call("/test-generation", key, provider, {
-        model: $("model").value.trim() || storageGet(modelStorageName(provider))
+        model: $("model").value.trim() || storageGet(modelStorageName(provider)),
+        allowCharges: $("allowCharges").checked
       });
       setStatus("keyStatus", "AI generation test passed. This confirms a basic model response without web search. It does not test live search grounding or prove that future requests are free.");
     } catch (error) {
@@ -303,7 +338,7 @@
   };
   $("clearKey").onclick = () => {
     try {
-      storageDelete(apiKeyStorageName($("provider").value)); storageSet(KEYS.provider, $("provider").value); storageDelete(modelStorageName($("provider").value));
+      storageDelete(apiKeyStorageName($("provider").value)); storageSet(KEYS.provider, $("provider").value); storageDelete(modelStorageName($("provider").value)); storageDelete(allowChargesStorageName($("provider").value)); $("allowCharges").checked = false;
       $("apiKey").value = ""; $("model").value = "";
       setStatus("keyStatus", "API key and provider settings cleared from this browser.");
       header();
@@ -376,7 +411,12 @@
     $("apiKey").value = storageGet(apiKeyStorageName($("provider").value));
     $("model").value = storageGet(modelStorageName($("provider").value));
     const savedWebSearch = storageGet(KEYS.webSearch);
-    $("webSearch").checked = savedWebSearch ? savedWebSearch === "true" : $("mode").value === "production";
+    $("webSearch").checked = savedWebSearch === "true";
+    if ($("mode").value === "testing") {
+      $("webSearch").checked = false;
+      try { storageSet(KEYS.webSearch, "false"); } catch (error) { setStatus("keyStatus", error.message); }
+    }
+    $("allowCharges").checked = storageGet(allowChargesStorageName($("provider").value)) === "true";
     $("depth").querySelectorAll('option[value="3"], option[value="4"]').forEach(option => { option.disabled = $("mode").value !== "production"; });
     if ($("mode").value === "testing" && Number($("depth").value) > 2) $("depth").value = "2";
     refreshProfiles();

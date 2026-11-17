@@ -31,11 +31,12 @@ Open the new `pages.dev` URL. Then test:
 - Select Google Gemini and enter your own key.
 - Select Test & Save Key. This confirms authentication only.
 - Select Load Models and choose a model returned for your key.
-- Select Test AI Generation. This checks a small model response without live web search.
+- In Settings, enable the API generation authorisation control only after reviewing provider billing and credit settings. It is off by default and does not guarantee free usage.
+- Select Test AI Generation. This checks a small model response without live web search, but may consume credits or incur charges.
 - If generation works, run one short research question with live web search disabled.
 - Only then enable live web search and run a separate short test. Google Search grounding can have a separate quota.
 
-Do not enable paid billing simply to complete these tests. OpenAI and Anthropic can be tested only if you already have keys and usable API credits or an existing funded account. The application cannot guarantee that a request will be free.
+Do not enable paid billing simply to complete these tests. OpenAI and Anthropic can be tested only if you already have keys and usable API credits or an existing funded account. The application cannot guarantee that a request will be free. Read `PROVIDER-USAGE-PROFILES.md` for the exact limitations and provider distinctions.
 
 ## 4. Important
 - Do not paste API keys into GitHub, Cloudflare source code, screenshots or chat.

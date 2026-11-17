@@ -7,7 +7,7 @@ export async function onRequestPost({ request }) {
   const checked = validateRequestBody(body);
   if (checked.error) return json({ error: checked.error }, 400);
   try {
-    return await testProviderGeneration(checked.provider, checked.key, body.model);
+    return await testProviderGeneration(checked.provider, checked.key, body.model, body.allowCharges === true);
   } catch (error) {
     return json({ error: error.message || "The AI generation test failed." }, 502);
   }

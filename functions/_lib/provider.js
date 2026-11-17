@@ -121,21 +121,23 @@ function makeInstructions(body) {
   const region = String(body.region || "unspecified").slice(0, 80);
   const spoilers = String(body.spoilers || "light").slice(0, 40);
   const reference = String(body.referenceInfo || "").slice(0, limits.maxReferenceLength);
+  const searchContext = Array.isArray(body.searchResults) ? body.searchResults.slice(0, 10) : [];
+  const externalSearchText = searchContext.map((item, i) => `SOURCE ${i+1}: ${item.title}\nURL: ${item.url}\nEXTRACT: ${item.content}`).join("\n\n");
   return `${ENTERTAINMENT_PROMPT}
 
 APPLICATION REQUEST SETTINGS
 - Category selection: ${category}. If automatic, identify and disambiguate the correct entity and specialist research structure.
 - Operating mode: ${limits.label}.
 - Research depth: Level ${depth}. Level 2 is Standard.
-- Live web search: ${body.webSearch === false ? "Disabled for this request. State clearly when current information cannot be verified." : "Enabled where supported by the provider."}
+- Live web search: ${body.externalSearch ? "Independent web search has been performed before this AI request. Use only the supplied search results as retrieved evidence; do not claim that you performed additional searches." : "No live web search results were supplied. State clearly when current information cannot be verified."}
 - Region: ${region}. Do not infer a region if unspecified.
 - Spoiler setting: ${spoilers}.
 - Every request is independent. Do not assume access to previous searches.
-- When live web search is enabled, use the provider's live web-search capability for current, upcoming, contested, detailed-credit and availability claims. When disabled, do not imply that current facts were checked.
+- When external search results are supplied below, use them as research leads, distinguish source statements from inference, and cite the supplied URLs. Do not invent sources or claim to have opened pages beyond the supplied extracts.
 - Similar entertainment recommendations and sourced interesting facts are standard parts of substantive research across categories.
 - Cite factual claims. Provide verified, entity-specific direct links. For screen entities, check IMDb and TMDB and disclose when a page cannot be confidently verified.
 - Do not invent facts, credits, links, IDs, dates, availability, citations or relationships. Label uncertainty and source conflicts.
-${reference ? "\nUSER-SUPPLIED REFERENCE INFORMATION (context only, not verified fact):\n" + reference : ""}`;
+${reference ? "\nUSER-SUPPLIED REFERENCE INFORMATION (context only, not verified fact):\n" + reference : ""}${externalSearchText ? "\n\nINDEPENDENT WEB SEARCH RESULTS (retrieved separately from the AI provider):\n" + externalSearchText : ""}`;
 }
 
 function extractGoogle(data) {
@@ -178,6 +180,7 @@ function extractAnthropic(data) {
 }
 
 export async function runResearch(provider, key, body) {
+  if (body?.allowCharges !== true) return json({ error: "AI generation is blocked because paid-usage authorisation is off. Review provider billing and explicitly authorise potentially chargeable API requests in application Settings." }, 403);
   const config = PROVIDERS[provider];
   if (!config) return json({ error: "Choose a supported AI provider." }, 400);
 
@@ -188,7 +191,7 @@ export async function runResearch(provider, key, body) {
   if (query.length > limits.maxQueryLength) return json({ error: `The question is too long for ${limits.label}. Maximum ${limits.maxQueryLength} characters.` }, 400);
 
   const depth = Math.min(limits.maxDepth, Math.max(1, Number(body.depth) || 2));
-  const webSearch = body.webSearch !== false;
+  const webSearch = body.webSearch === true;
   const model = String(body.model || "").trim();
   if (!model) return json({ error: "Load the available models for this provider and select a model before running research." }, 400);
   const instructions = makeInstructions({ ...body, mode, depth, webSearch });
@@ -199,7 +202,7 @@ export async function runResearch(provider, key, body) {
     payload = {
       systemInstruction: { parts: [{ text: instructions }] },
       contents: [{ role: "user", parts: [{ text: query }] }],
-      ...(webSearch ? { tools: [{ google_search: {} }] } : {}),
+      
       generationConfig: { temperature: 0.3, maxOutputTokens: mode === "testing" ? 2500 : 8192 },
     };
   } else if (provider === "openai") {
@@ -209,10 +212,7 @@ export async function runResearch(provider, key, body) {
       instructions,
       input: query,
       max_output_tokens: mode === "testing" ? 2500 : 12000,
-      ...(webSearch ? {
-        tools: [{ type: "web_search", search_context_size: mode === "testing" ? "low" : depth >= 3 ? "high" : "medium" }],
-        tool_choice: "required",
-      } : {}),
+
     };
   } else {
     url = "https://api.anthropic.com/v1/messages";
@@ -220,7 +220,7 @@ export async function runResearch(provider, key, body) {
       model,
       max_tokens: mode === "testing" ? 3000 : depth >= 3 ? 12000 : 8000,
       system: instructions,
-      ...(webSearch ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: mode === "testing" ? 1 : depth >= 3 ? 8 : 5 }] } : {}),
+
       messages: [{ role: "user", content: query }],
     };
   }
@@ -240,7 +240,8 @@ export async function runResearch(provider, key, body) {
     : provider === "openai" ? extractOpenAI(data)
     : extractAnthropic(data);
 
-  const unique = extracted.citations.filter((item, index, all) =>
+  const supplied = (body.searchResults || []).map(item => ({ title: item.title, url: item.url }));
+  const unique = [...extracted.citations, ...supplied].filter((item, index, all) =>
     item.url && /^https?:\/\//i.test(item.url) && all.findIndex(other => other.url === item.url) === index
   );
   if (!extracted.text.trim()) {
@@ -253,12 +254,15 @@ export async function runResearch(provider, key, body) {
     provider,
     model,
     mode,
-    webSearch,
+    webSearch: body.externalSearch === true,
+    searchProvider: body.externalSearch ? "Tavily" : null,
+    searchResultCount: (body.searchResults || []).length,
   });
 }
 
 
-export async function testProviderGeneration(provider, key, modelOverride = "") {
+export async function testProviderGeneration(provider, key, modelOverride = "", allowCharges = false) {
+  if (allowCharges !== true) return json({ error: "AI generation is blocked because paid-usage authorisation is off. Review provider billing and explicitly authorise potentially chargeable API requests in application Settings." }, 403);
   const config = PROVIDERS[provider];
   if (!config) return json({ error: "Choose a supported AI provider." }, 400);
   const model = String(modelOverride || "").trim();

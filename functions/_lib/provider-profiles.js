@@ -1,4 +1,5 @@
 // Provider billing labels are user-selected descriptions, not live billing verification.
+// A profile never grants permission to generate. Explicit allowCharges consent is required separately.
 export const PROVIDER_PROFILES = {
   google: [
     { id: "free", label: "Google Free Tier" },

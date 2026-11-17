@@ -57,3 +57,45 @@ Date: 15 November 2026
 - Additional providers beyond Gemini, OpenAI and Anthropic.
 - Automated provider model discovery and model selector.
 - Full responsive and accessibility audit on physical devices.
+
+
+## v0.1 Pilot Draft. Provider Usage Profiles and Operating Modes
+Date: 16 November 2026
+
+### Changes
+- Added Testing Mode and Production Mode with server-enforced input, context and depth limits.
+- Added provider account profile labels for Google Gemini, OpenAI and Anthropic. These are descriptive only and do not claim live billing verification.
+- Added provider model discovery and a separate basic generation test without web search.
+- Added a per-provider explicit API generation authorisation control, off by default and enforced by the backend for generation tests and research. Clearing a provider key also clears its authorisation.
+- Changed live web search to default off in both modes. Production Mode no longer enables it automatically. The backend also treats a missing webSearch flag as disabled.
+- Retained the Cloudflare Pages manual redirect handling fix and existing Entertainment 3.8 prompt source.
+
+### Files affected
+- Added: `functions/_lib/provider-profiles.js`, `functions/api/models.js`, `functions/api/test-generation.js`, `README-REVISION-16-NOV-2026.md`, `PROVIDER-USAGE-PROFILES.md`.
+- Updated: `functions/_lib/provider.js`, `app.js`, `index.html`, `styles.css`, `README.md`, `CHANGELOG.md`, `BUILD-NOTES.md`, `RESEARCH-MAPPING.md`, `README-CLOUDFLARE-SETUP.md`.
+
+### Verification
+- JavaScript syntax checks passed for the browser script and all Pages Function modules.
+- HTML element IDs and route configuration checked.
+- Mocked backend tests confirmed generation is blocked without authorisation and omitted webSearch defaults to off.
+- ZIP integrity checked.
+- Not tested: live provider calls, GitHub upload, Cloudflare deployment, iPhone Safari or Windows browser behaviour.
+
+### Known limitations
+- The app cannot inspect provider balances, determine whether a specific request will be free, or stop a request based on a provider-side credit balance. The authorisation control is consent, not a guaranteed spend ceiling.
+- Provider model-list endpoints do not prove access to every generation or web-search feature.
+- No automatic provider switching, paid fallback, automatic retries, or server-side per-user request budget is implemented.
+
+
+## 16 November 2026. Independent search revision
+
+- Added Tavily as an independent web-search service, separate from the selected AI model provider.
+- Added a separate search API key field and connection test.
+- Research now retrieves web results first and supplies those results to the AI model for analysis.
+- Disabled provider-native search/grounding tools in this workflow to avoid the Gemini Free Tier grounding restriction encountered during testing.
+- Replaced the embedded prompt source with the user's approved Entertainment Relationship Explorer v3.8 master prompt.
+- Added `INDEPENDENT-SEARCH-ARCHITECTURE.md`.
+- Live provider integration and end-to-end research remain unverified until deployed and tested with real API keys.
+
+- Clarified that search snippets are research leads, not full source-page verification.
+- Added Tavily setup, current free-credit information and exact pilot-branch deployment steps.

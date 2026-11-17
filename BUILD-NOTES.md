@@ -23,3 +23,13 @@ No live provider calls, Cloudflare deployment, or device testing are claimed for
 
 
 Model discovery is provided by `/api/models`. Google results are filtered to models advertising `generateContent`; OpenAI and Anthropic model IDs are listed from their account model endpoints. The list is not a guarantee of web-search tool or feature compatibility.
+
+
+## Additional billing-safety revision
+Date: 16 November 2026
+
+A separate `allowCharges` authorisation is now required for AI generation tests and research requests. It defaults to off, is stored separately for each provider in the current browser, and is checked again by the Pages Function backend. Clearing a provider key also clears that provider's authorisation. Provider API-key authentication and model-list retrieval remain available without generation authorisation.
+
+Live web search now defaults to off in both operating modes. Switching to Production Mode no longer silently enables it. Switching to Testing Mode turns it off, and the app also forces it off when Testing Mode is loaded. The backend treats omitted `webSearch` as false.
+
+This is an explicit consent gate, not a technical guarantee that requests are free or a server-side spend cap. The provider does not expose a reliable per-request free/paid status or credit-balance check through the endpoints used here. If the user authorises generation, requests may consume promotional credits, free quotas, prepaid balances or paid billing depending on provider account, project, model, feature and remaining balance. Provider-side billing controls remain authoritative.
